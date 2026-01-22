@@ -397,9 +397,8 @@ def create_heatmap(results_df: pd.DataFrame, value_col: str = 'signal_strength')
         zmid=0,
         showscale=True,
         colorbar=dict(
-            title='Signal',
-            tickfont=dict(color=COLORS['muted']),
-            titlefont=dict(color=COLORS['muted'])
+            title=dict(text='Signal', font=dict(color=COLORS['muted'])),
+            tickfont=dict(color=COLORS['muted'])
         )
     ))
     

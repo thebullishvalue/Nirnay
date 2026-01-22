@@ -2,6 +2,7 @@
 NIRNAY (निर्णय) - Decisive Market Intelligence
 
 Unified Quantitative Market Intelligence System
+A Pragyam Product Family Member
 
 Integrates:
 - Signal Generation (MSF + MMR from UMA)
@@ -10,7 +11,6 @@ Integrates:
 - Multi-mode Analysis (Dashboard, Chart, Screener, Regime, Timeseries)
 
 Version: 1.0.0
-Author: Hemrek Capital
 """
 
 import streamlit as st
@@ -167,9 +167,9 @@ st.markdown("""
 def render_header():
     st.markdown(f"""
     <div class='premium-header'>
-        <div class='product-badge'>Hemrek Capital</div>
+        <div class='product-badge'>Pragyam Product Family</div>
         <h1>◈ NIRNAY <span style='font-size: 1.2rem; color: var(--text-muted);'>निर्णय</span></h1>
-        <div class='tagline'>Decisive Market Intelligence | Unified Signal + Regime Intelligence | {VERSION}</div>
+        <div class='tagline'>Unified Signal + Regime Intelligence | {VERSION}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -179,7 +179,7 @@ def render_sidebar():
         st.markdown("""
         <div style='text-align: center; padding: 1rem 0;'>
             <h2 style='color: var(--primary-color); margin: 0;'>◈ NIRNAY</h2>
-            <p style='color: var(--text-muted); font-size: 0.8rem; margin: 0.25rem 0;'>Unified Intelligence</p>
+            <p style='color: var(--text-muted); font-size: 0.8rem; margin: 0.25rem 0;'>निर्णय | Decision Intelligence</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -789,7 +789,7 @@ def main():
         run_regime_mode(params)
     
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.caption(f"© {datetime.now().year} NIRNAY | Hemrek Capital | {VERSION}")
+    st.caption(f"NIRNAY | A Pragyam Product | {VERSION}")
 
 
 if __name__ == "__main__":

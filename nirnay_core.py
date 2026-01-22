@@ -2,6 +2,7 @@
 NIRNAY (निर्णय) - Decisive Market Intelligence
 
 Core Engine: Unified Signal Generation + Regime Intelligence
+A Pragyam Product Family Member
 
 This module integrates:
 1. MSF (Market Strength Factor) - Momentum, Microstructure, Trend, Flow
@@ -16,7 +17,6 @@ The key innovation: Signals are REGIME-AWARE and use ADAPTIVE thresholds
 instead of fixed values like "overbought > 5".
 
 Version: 1.0.0
-Author: Hemrek Capital
 """
 
 import numpy as np

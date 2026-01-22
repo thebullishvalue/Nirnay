@@ -1,9 +1,9 @@
 # ◈ NIRNAY (निर्णय) - Decisive Market Intelligence
 
-**Unified Quantitative Market Intelligence System**
+**Unified Quantitative Market Intelligence System**  
+**A Pragyam Product Family Member**
 
-Version: 1.0.0  
-Author: Hemrek Capital
+Version: 1.0.0
 
 ---
 
@@ -300,7 +300,7 @@ class NirnayResult:
 
 ## License
 
-Proprietary - Hemrek Capital
+Proprietary - Pragyam Product Family
 
 ---
 
