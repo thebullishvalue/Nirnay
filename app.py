@@ -2969,6 +2969,50 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
             st.plotly_chart(fig_div, width="stretch", config={'displayModeBar': False})
         
         with tab3:
+            # ORIGINAL: Average Signal Value Over Time
+            st.markdown("##### Average Signal Value Over Time")
+            st.markdown('<p style="color: #888888; font-size: 0.85rem;">Negative = Bullish Bias | Positive = Bearish Bias</p>', unsafe_allow_html=True)
+            
+            fig_avg = go.Figure()
+            
+            colors = ['#10b981' if v < -2 else '#ef4444' if v > 2 else '#888888' for v in ts_df['Avg_Signal']]
+            
+            fig_avg.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(lower=0),
+                fill='tozeroy', fillcolor='rgba(239,68,68,0.15)',
+                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            ))
+            
+            fig_avg.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(upper=0),
+                fill='tozeroy', fillcolor='rgba(16,185,129,0.15)',
+                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            ))
+            
+            fig_avg.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Avg_Signal'],
+                mode='lines+markers', name='Avg Signal',
+                line=dict(color='#FFC300', width=2),
+                marker=dict(size=6, color=colors)
+            ))
+            
+            fig_avg.add_hline(y=2, line=dict(color='rgba(239,68,68,0.5)', width=1, dash='dash'))
+            fig_avg.add_hline(y=-2, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
+            fig_avg.add_hline(y=0, line=dict(color='rgba(255,255,255,0.3)', width=1))
+            
+            fig_avg.update_layout(
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
+                margin=dict(l=10, r=10, t=30, b=50),
+                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-8, 8]),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
+                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
+            )
+            st.plotly_chart(fig_avg, width="stretch", config={'displayModeBar': False})
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # NEW: HMM Regime Distribution Over Time
             st.markdown("##### HMM Regime Distribution Over Time")
             st.markdown('<p style="color: #888888; font-size: 0.85rem;">Percentage of stocks in each HMM regime daily</p>', unsafe_allow_html=True)
             
@@ -2990,7 +3034,7 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
             ))
             
             fig_regime.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
                 margin=dict(l=10, r=10, t=30, b=50),
                 xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
                 yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of Stocks', range=[0, 100]),
@@ -3019,7 +3063,7 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
             ))
             
             fig_vol.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=250,
                 margin=dict(l=10, r=10, t=10, b=50),
                 xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
                 yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Count / %'),
@@ -3442,6 +3486,50 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             st.plotly_chart(fig_div, width="stretch", config={'displayModeBar': False})
         
         with tab3:
+            # ORIGINAL: Average Signal Value Over Time
+            st.markdown("##### Average Signal Value Over Time")
+            st.markdown('<p style="color: #888888; font-size: 0.85rem;">Negative = Bullish Bias | Positive = Bearish Bias</p>', unsafe_allow_html=True)
+            
+            fig_avg = go.Figure()
+            
+            colors = ['#10b981' if v < -2 else '#ef4444' if v > 2 else '#888888' for v in ts_df['Avg_Signal']]
+            
+            fig_avg.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(lower=0),
+                fill='tozeroy', fillcolor='rgba(239,68,68,0.15)',
+                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            ))
+            
+            fig_avg.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(upper=0),
+                fill='tozeroy', fillcolor='rgba(16,185,129,0.15)',
+                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            ))
+            
+            fig_avg.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Avg_Signal'],
+                mode='lines+markers', name='Avg Signal',
+                line=dict(color='#FFC300', width=2),
+                marker=dict(size=6, color=colors)
+            ))
+            
+            fig_avg.add_hline(y=2, line=dict(color='rgba(239,68,68,0.5)', width=1, dash='dash'))
+            fig_avg.add_hline(y=-2, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
+            fig_avg.add_hline(y=0, line=dict(color='rgba(255,255,255,0.3)', width=1))
+            
+            fig_avg.update_layout(
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
+                margin=dict(l=10, r=10, t=30, b=50),
+                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-8, 8]),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
+                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
+            )
+            st.plotly_chart(fig_avg, width="stretch", config={'displayModeBar': False})
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # NEW: HMM Regime Distribution Over Time
             st.markdown("##### HMM Regime Distribution Over Time")
             st.markdown('<p style="color: #888888; font-size: 0.85rem;">Percentage of ETFs in each HMM regime daily</p>', unsafe_allow_html=True)
             
@@ -3463,7 +3551,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             ))
             
             fig_regime.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
                 margin=dict(l=10, r=10, t=30, b=50),
                 xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
                 yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of ETFs', range=[0, 100]),
@@ -3492,7 +3580,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             ))
             
             fig_vol.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=250,
                 margin=dict(l=10, r=10, t=10, b=50),
                 xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
                 yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Count / %'),
