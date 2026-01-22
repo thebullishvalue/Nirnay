@@ -1040,9 +1040,10 @@ def run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight):
 
 
 def run_msf_only_analysis(df, length, roc_len):
-    """Run MSF-only analysis for spread screener (no MMR for speed)"""
+    """Run MSF-only analysis with regime intelligence (no MMR for speed, but includes HMM/GARCH/CUSUM)"""
     df['MSF'], df['Micro'], df['Momentum'], df['Flow'] = calculate_msf(df, length, roc_len)
     
+    df['Unified'] = df['MSF']  # MSF is the unified signal when no MMR
     df['Unified_Osc'] = df['MSF'] * 10
     df['MSF_Osc'] = df['MSF'] * 10
     df['MMR_Osc'] = 0  # No MMR in spread screener
@@ -1068,6 +1069,71 @@ def run_msf_only_analysis(df, length, roc_len):
             conditions.append("Neutral")
     df['Condition'] = conditions
     df['Agreement'] = df['MSF'] ** 2  # Self-agreement
+
+    # === REGIME INTELLIGENCE (same as run_full_analysis) ===
+    hmm = AdaptiveHMM()
+    garch = GARCHDetector()
+    cusum = CUSUMDetector()
+    kalman = AdaptiveKalmanFilter()
+    
+    regimes = []
+    hmm_bulls = []
+    hmm_bears = []
+    vol_regimes = []
+    change_points = []
+    confidences = []
+    signal_history = []
+    
+    unified_vals = df['Unified'].values
+    
+    for i in range(len(df)):
+        sig = unified_vals[i] if not np.isnan(unified_vals[i]) else 0
+        
+        # Kalman filter for smoothing
+        filtered = kalman.update(sig)
+        
+        # GARCH for volatility regime
+        shock = sig - signal_history[-1] if signal_history else 0
+        garch.update(shock)
+        vol_regime, _ = garch.get_regime()
+        
+        # HMM for market state
+        hmm_probs = hmm.update(filtered)
+        
+        # CUSUM for change point detection
+        change = cusum.update(filtered)
+        
+        # Determine regime
+        bull_p = hmm_probs['BULL']
+        bear_p = hmm_probs['BEAR']
+        
+        if change:
+            regime = "TRANSITION"
+        elif bull_p > 0.6:
+            regime = "BULL"
+        elif bear_p > 0.6:
+            regime = "BEAR"
+        elif bull_p > 0.4:
+            regime = "WEAK_BULL"
+        elif bear_p > 0.4:
+            regime = "WEAK_BEAR"
+        else:
+            regime = "NEUTRAL"
+        
+        regimes.append(regime)
+        hmm_bulls.append(bull_p)
+        hmm_bears.append(bear_p)
+        vol_regimes.append(vol_regime)
+        change_points.append(change)
+        confidences.append(max(bull_p, bear_p, hmm_probs['NEUTRAL']))
+        signal_history.append(sig)
+    
+    df['Regime'] = regimes
+    df['HMM_Bull'] = hmm_bulls
+    df['HMM_Bear'] = hmm_bears
+    df['Vol_Regime'] = vol_regimes
+    df['Change_Point'] = change_points
+    df['Confidence'] = confidences
 
     return df
 
@@ -2251,7 +2317,14 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
                         "Zone": last_row['Condition'],
                         "Trigger": signal_str,
                         "Divergence": div_str,
-                        "Agreement": round(last_row['Agreement'], 3)
+                        "Agreement": round(last_row['Agreement'], 3),
+                        # Regime Intelligence columns
+                        "Regime": last_row['Regime'],
+                        "HMM_Bull": round(last_row['HMM_Bull'], 2),
+                        "HMM_Bear": round(last_row['HMM_Bear'], 2),
+                        "Vol_Regime": last_row['Vol_Regime'],
+                        "Confidence": round(last_row['Confidence'], 2),
+                        "Change_Point": last_row['Change_Point']
                     })
                 except Exception:
                     pass
@@ -2271,8 +2344,12 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
             n_sells = len(results_df[results_df['Trigger'] == 'SELL'])
             avg_signal = results_df['Signal'].mean()
             
-            regime = "BULLISH BIAS" if avg_signal < -2 else "BEARISH BIAS" if avg_signal > 2 else "NEUTRAL"
-            regime_color = "success" if avg_signal < -2 else "danger" if avg_signal > 2 else "neutral"
+            # NEW: Calculate HMM regime distribution
+            n_bull = len(results_df[results_df['Regime'].str.contains('BULL', na=False)])
+            n_bear = len(results_df[results_df['Regime'].str.contains('BEAR', na=False)])
+            n_transition = len(results_df[results_df['Regime'] == 'TRANSITION'])
+            dominant_regime = results_df['Regime'].mode().iloc[0] if len(results_df) > 0 else "NEUTRAL"
+            regime_color = "success" if "BULL" in dominant_regime else "danger" if "BEAR" in dominant_regime else "warning" if dominant_regime == "TRANSITION" else "neutral"
             
             # Metrics row
             st.markdown("<br>", unsafe_allow_html=True)
@@ -2288,12 +2365,12 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
             with c5:
                 st.markdown(f'<div class="metric-card warning"><h4>Sell Signals</h4><h2>{n_sells}</h2><div class="sub-metric">Confirmed</div></div>', unsafe_allow_html=True)
             with c6:
-                st.markdown(f'<div class="metric-card {regime_color}"><h4>Regime</h4><h2 style="font-size: 1.1rem;">{regime}</h2><div class="sub-metric">Avg: {avg_signal:.2f}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-card {regime_color}"><h4>HMM Regime</h4><h2 style="font-size: 1.1rem;">{dominant_regime}</h2><div class="sub-metric">Bull: {n_bull} | Bear: {n_bear}</div></div>', unsafe_allow_html=True)
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
             
-            # Tabs for different views
-            tab1, tab2, tab3, tab4 = st.tabs(["**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**📋 Full Data**"])
+            # Tabs for different views - ADD 5th tab for Regime
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**🎯 Regime Analysis**", "**📋 Full Data**"])
             
             with tab1:
                 col_buy, col_sell = st.columns(2)
@@ -2414,6 +2491,63 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
                     st.dataframe(top_losers, width="stretch", hide_index=True)
             
             with tab4:
+                # NEW: Regime Intelligence Analysis Tab
+                st.markdown("##### HMM Regime Distribution")
+                c1, c2 = st.columns(2)
+                
+                with c1:
+                    regime_counts = results_df['Regime'].value_counts()
+                    regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
+                    fig_regime = go.Figure(go.Pie(
+                        labels=regime_counts.index, values=regime_counts.values, hole=0.5,
+                        marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
+                        textinfo='label+percent', textfont=dict(size=11, color='white')
+                    ))
+                    fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='HMM Regime', font=dict(size=14, color='#888888')))
+                    st.plotly_chart(fig_regime, use_container_width=True, config={'displayModeBar': False})
+                
+                with c2:
+                    vol_counts = results_df['Vol_Regime'].value_counts()
+                    vol_colors = {'LOW': '#10b981', 'NORMAL': '#888888', 'HIGH': '#f59e0b', 'EXTREME': '#ef4444'}
+                    fig_vol = go.Figure(go.Pie(
+                        labels=vol_counts.index, values=vol_counts.values, hole=0.5,
+                        marker=dict(colors=[vol_colors.get(v, '#888888') for v in vol_counts.index], line=dict(color='#1A1A1A', width=2)),
+                        textinfo='label+percent', textfont=dict(size=11, color='white')
+                    ))
+                    fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='Volatility Regime (GARCH)', font=dict(size=14, color='#888888')))
+                    st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
+                
+                st.markdown("##### Regime Breakdown by Stock")
+                
+                # Bull regime stocks
+                col_bull, col_bear = st.columns(2)
+                with col_bull:
+                    st.markdown('<span class="status-badge buy">BULLISH REGIME STOCKS</span>', unsafe_allow_html=True)
+                    bull_stocks = results_df[results_df['Regime'].str.contains('BULL', na=False)].sort_values('HMM_Bull', ascending=False)
+                    if len(bull_stocks) > 0:
+                        for _, row in bull_stocks.head(15).iterrows():
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #10b981;">P(Bull): {row["HMM_Bull"]:.0%}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.info("No stocks in bullish regime")
+                
+                with col_bear:
+                    st.markdown('<span class="status-badge sell">BEARISH REGIME STOCKS</span>', unsafe_allow_html=True)
+                    bear_stocks = results_df[results_df['Regime'].str.contains('BEAR', na=False)].sort_values('HMM_Bear', ascending=False)
+                    if len(bear_stocks) > 0:
+                        for _, row in bear_stocks.head(15).iterrows():
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #ef4444;">P(Bear): {row["HMM_Bear"]:.0%}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.info("No stocks in bearish regime")
+                
+                # Change points
+                change_point_stocks = results_df[results_df['Change_Point'] == True]
+                if len(change_point_stocks) > 0:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown('<span class="status-badge regime">⚠️ CHANGE POINTS DETECTED</span>', unsafe_allow_html=True)
+                    for _, row in change_point_stocks.head(10).iterrows():
+                        st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • Regime Transition</span></div><span class="symbol-score" style="color: #a855f7;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+            
+            with tab5:
                 st.markdown(f"##### Complete Market Scan Results ({len(results_df)} stocks) - {analysis_date_str}")
                 
                 # Filter options
@@ -2592,7 +2726,15 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
                 "Avg_Signal": 0,
                 "Signal_Sum": 0,
                 "Bull_Div": 0,
-                "Bear_Div": 0
+                "Bear_Div": 0,
+                # NEW: Regime Intelligence stats
+                "Regime_Bull": 0,
+                "Regime_Bear": 0,
+                "Regime_Neutral": 0,
+                "Regime_Transition": 0,
+                "Vol_High": 0,
+                "Vol_Low": 0,
+                "Change_Points": 0
             }
             
             for ticker, df in processed_data.items():
@@ -2621,6 +2763,26 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
                         day_stats["Bull_Div"] += 1
                     if row['Bearish_Div']:
                         day_stats["Bear_Div"] += 1
+                    
+                    # NEW: Regime Intelligence stats
+                    regime = row['Regime']
+                    if 'BULL' in regime:
+                        day_stats["Regime_Bull"] += 1
+                    elif 'BEAR' in regime:
+                        day_stats["Regime_Bear"] += 1
+                    elif regime == 'TRANSITION':
+                        day_stats["Regime_Transition"] += 1
+                    else:
+                        day_stats["Regime_Neutral"] += 1
+                    
+                    vol_regime = row['Vol_Regime']
+                    if vol_regime in ['HIGH', 'EXTREME']:
+                        day_stats["Vol_High"] += 1
+                    elif vol_regime == 'LOW':
+                        day_stats["Vol_Low"] += 1
+                    
+                    if row['Change_Point']:
+                        day_stats["Change_Points"] += 1
                         
                 except Exception:
                     pass
@@ -2630,10 +2792,17 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
                 day_stats["Oversold_Pct"] = (day_stats["Oversold"] / day_stats["Total_Analyzed"]) * 100
                 day_stats["Overbought_Pct"] = (day_stats["Overbought"] / day_stats["Total_Analyzed"]) * 100
                 day_stats["Neutral_Pct"] = (day_stats["Neutral"] / day_stats["Total_Analyzed"]) * 100
+                # NEW: Regime percentages
+                day_stats["Regime_Bull_Pct"] = (day_stats["Regime_Bull"] / day_stats["Total_Analyzed"]) * 100
+                day_stats["Regime_Bear_Pct"] = (day_stats["Regime_Bear"] / day_stats["Total_Analyzed"]) * 100
+                day_stats["Vol_High_Pct"] = (day_stats["Vol_High"] / day_stats["Total_Analyzed"]) * 100
             else:
                 day_stats["Oversold_Pct"] = 0
                 day_stats["Overbought_Pct"] = 0
                 day_stats["Neutral_Pct"] = 0
+                day_stats["Regime_Bull_Pct"] = 0
+                day_stats["Regime_Bear_Pct"] = 0
+                day_stats["Vol_High_Pct"] = 0
             
             timeseries_results.append(day_stats)
         
@@ -2800,60 +2969,77 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
             st.plotly_chart(fig_div, width="stretch", config={'displayModeBar': False})
         
         with tab3:
-            st.markdown("##### Average Signal Value Over Time")
-            st.markdown('<p style="color: #888888; font-size: 0.85rem;">Negative = Bullish Bias | Positive = Bearish Bias</p>', unsafe_allow_html=True)
+            st.markdown("##### HMM Regime Distribution Over Time")
+            st.markdown('<p style="color: #888888; font-size: 0.85rem;">Percentage of stocks in each HMM regime daily</p>', unsafe_allow_html=True)
             
-            fig_avg = go.Figure()
+            # Regime trend chart
+            fig_regime = go.Figure()
             
-            # Color based on value
-            colors = ['#10b981' if v < -2 else '#ef4444' if v > 2 else '#888888' for v in ts_df['Avg_Signal']]
-            
-            fig_avg.add_trace(go.Scatter(
-                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(lower=0),
-                fill='tozeroy', fillcolor='rgba(239,68,68,0.15)',
-                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            fig_regime.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Regime_Bull_Pct'],
+                mode='lines', name='Bull Regime %',
+                fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.3)',
+                line=dict(color='#10b981', width=2)
             ))
             
-            fig_avg.add_trace(go.Scatter(
-                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(upper=0),
-                fill='tozeroy', fillcolor='rgba(16,185,129,0.15)',
-                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            fig_regime.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Regime_Bear_Pct'],
+                mode='lines', name='Bear Regime %',
+                fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.3)',
+                line=dict(color='#ef4444', width=2)
             ))
             
-            fig_avg.add_trace(go.Scatter(
-                x=ts_df['Date'], y=ts_df['Avg_Signal'],
-                mode='lines+markers', name='Avg Signal',
-                line=dict(color='#FFC300', width=2),
-                marker=dict(size=6, color=colors)
-            ))
-            
-            fig_avg.add_hline(y=2, line=dict(color='rgba(239,68,68,0.5)', width=1, dash='dash'))
-            fig_avg.add_hline(y=-2, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
-            fig_avg.add_hline(y=0, line=dict(color='rgba(255,255,255,0.3)', width=1))
-            
-            fig_avg.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=400,
+            fig_regime.update_layout(
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
                 margin=dict(l=10, r=10, t=30, b=50),
                 xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-8, 8]),
+                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of Stocks', range=[0, 100]),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
                 font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
             )
-            st.plotly_chart(fig_avg, width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("##### Volatility Regime & Change Points Over Time")
+            
+            # Volatility regime chart
+            fig_vol = go.Figure()
+            
+            fig_vol.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Vol_High_Pct'],
+                mode='lines+markers', name='High Vol %',
+                line=dict(color='#f59e0b', width=2),
+                marker=dict(size=5)
+            ))
+            
+            fig_vol.add_trace(go.Bar(
+                x=ts_df['Date'], y=ts_df['Change_Points'],
+                name='Change Points',
+                marker=dict(color='#a855f7', opacity=0.7)
+            ))
+            
+            fig_vol.update_layout(
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
+                margin=dict(l=10, r=10, t=10, b=50),
+                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Count / %'),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
+                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
+            )
+            st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
             
             st.markdown("<br>", unsafe_allow_html=True)
             col_r1, col_r2 = st.columns(2)
             
             with col_r1:
-                st.markdown("##### Regime Statistics")
-                bullish_days = len(ts_df[ts_df['Avg_Signal'] < -2])
-                bearish_days = len(ts_df[ts_df['Avg_Signal'] > 2])
-                neutral_days = len(ts_df) - bullish_days - bearish_days
+                st.markdown("##### HMM Regime Statistics")
+                avg_bull = ts_df['Regime_Bull_Pct'].mean()
+                avg_bear = ts_df['Regime_Bear_Pct'].mean()
+                total_changes = ts_df['Change_Points'].sum()
                 
                 regime_stats = {
-                    "Regime": ["Bullish (< -2)", "Neutral (-2 to +2)", "Bearish (> +2)"],
-                    "Days": [bullish_days, neutral_days, bearish_days],
-                    "Percentage": [f"{bullish_days/len(ts_df)*100:.1f}%", f"{neutral_days/len(ts_df)*100:.1f}%", f"{bearish_days/len(ts_df)*100:.1f}%"]
+                    "Metric": ["Avg Bull Regime %", "Avg Bear Regime %", "Total Change Points", "Avg High Vol %"],
+                    "Value": [f"{avg_bull:.1f}%", f"{avg_bear:.1f}%", f"{int(total_changes)}", f"{ts_df['Vol_High_Pct'].mean():.1f}%"]
                 }
                 st.dataframe(pd.DataFrame(regime_stats), width="stretch", hide_index=True)
             
@@ -2874,12 +3060,14 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
         with tab4:
             st.markdown(f"##### Daily Time Series Data ({len(ts_df)} trading days)")
             
-            display_ts = ts_df[['Date', 'Total_Analyzed', 'Oversold', 'Neutral', 'Overbought', 
-                               'Buy_Signals', 'Sell_Signals', 'Avg_Signal', 'Bull_Div', 'Bear_Div']].copy()
+            # Include regime data in display
+            display_ts = ts_df[['Date', 'Total_Analyzed', 'Oversold', 'Overbought', 
+                               'Buy_Signals', 'Sell_Signals', 'Avg_Signal', 
+                               'Regime_Bull', 'Regime_Bear', 'Change_Points']].copy()
             display_ts['Date'] = display_ts['Date'].dt.strftime('%Y-%m-%d')
             display_ts['Avg_Signal'] = display_ts['Avg_Signal'].round(2)
-            display_ts.columns = ['Date', 'Stocks', 'Oversold', 'Neutral', 'Overbought', 
-                                 'Buy Sig', 'Sell Sig', 'Avg Signal', 'Bull Div', 'Bear Div']
+            display_ts.columns = ['Date', 'Stocks', 'Oversold', 'Overbought', 
+                                 'Buy Sig', 'Sell Sig', 'Avg Sig', 'Bull Regime', 'Bear Regime', 'Changes']
             
             st.dataframe(display_ts, width="stretch", hide_index=True, height=500)
             
@@ -3014,7 +3202,15 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                 "Avg_Signal": 0,
                 "Signal_Sum": 0,
                 "Bull_Div": 0,
-                "Bear_Div": 0
+                "Bear_Div": 0,
+                # Regime Intelligence stats
+                "Regime_Bull": 0,
+                "Regime_Bear": 0,
+                "Regime_Neutral": 0,
+                "Regime_Transition": 0,
+                "Vol_High": 0,
+                "Vol_Low": 0,
+                "Change_Points": 0
             }
             
             for symbol, df in processed_data.items():
@@ -3042,6 +3238,26 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                         day_stats["Bull_Div"] += 1
                     if row['Bearish_Div']:
                         day_stats["Bear_Div"] += 1
+                    
+                    # Regime Intelligence stats
+                    regime = row['Regime']
+                    if 'BULL' in regime:
+                        day_stats["Regime_Bull"] += 1
+                    elif 'BEAR' in regime:
+                        day_stats["Regime_Bear"] += 1
+                    elif regime == 'TRANSITION':
+                        day_stats["Regime_Transition"] += 1
+                    else:
+                        day_stats["Regime_Neutral"] += 1
+                    
+                    vol_regime = row['Vol_Regime']
+                    if vol_regime in ['HIGH', 'EXTREME']:
+                        day_stats["Vol_High"] += 1
+                    elif vol_regime == 'LOW':
+                        day_stats["Vol_Low"] += 1
+                    
+                    if row['Change_Point']:
+                        day_stats["Change_Points"] += 1
                         
                 except Exception:
                     pass
@@ -3051,10 +3267,17 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                 day_stats["Oversold_Pct"] = (day_stats["Oversold"] / day_stats["Total_Analyzed"]) * 100
                 day_stats["Overbought_Pct"] = (day_stats["Overbought"] / day_stats["Total_Analyzed"]) * 100
                 day_stats["Neutral_Pct"] = (day_stats["Neutral"] / day_stats["Total_Analyzed"]) * 100
+                # Regime percentages
+                day_stats["Regime_Bull_Pct"] = (day_stats["Regime_Bull"] / day_stats["Total_Analyzed"]) * 100
+                day_stats["Regime_Bear_Pct"] = (day_stats["Regime_Bear"] / day_stats["Total_Analyzed"]) * 100
+                day_stats["Vol_High_Pct"] = (day_stats["Vol_High"] / day_stats["Total_Analyzed"]) * 100
             else:
                 day_stats["Oversold_Pct"] = 0
                 day_stats["Overbought_Pct"] = 0
                 day_stats["Neutral_Pct"] = 0
+                day_stats["Regime_Bull_Pct"] = 0
+                day_stats["Regime_Bear_Pct"] = 0
+                day_stats["Vol_High_Pct"] = 0
             
             timeseries_results.append(day_stats)
         
@@ -3219,59 +3442,77 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             st.plotly_chart(fig_div, width="stretch", config={'displayModeBar': False})
         
         with tab3:
-            st.markdown("##### Average Signal Value Over Time")
-            st.markdown('<p style="color: #888888; font-size: 0.85rem;">Negative = Bullish Bias | Positive = Bearish Bias</p>', unsafe_allow_html=True)
+            st.markdown("##### HMM Regime Distribution Over Time")
+            st.markdown('<p style="color: #888888; font-size: 0.85rem;">Percentage of ETFs in each HMM regime daily</p>', unsafe_allow_html=True)
             
-            fig_avg = go.Figure()
+            # Regime trend chart
+            fig_regime = go.Figure()
             
-            colors = ['#10b981' if v < -2 else '#ef4444' if v > 2 else '#888888' for v in ts_df['Avg_Signal']]
-            
-            fig_avg.add_trace(go.Scatter(
-                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(lower=0),
-                fill='tozeroy', fillcolor='rgba(239,68,68,0.15)',
-                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            fig_regime.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Regime_Bull_Pct'],
+                mode='lines', name='Bull Regime %',
+                fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.3)',
+                line=dict(color='#10b981', width=2)
             ))
             
-            fig_avg.add_trace(go.Scatter(
-                x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(upper=0),
-                fill='tozeroy', fillcolor='rgba(16,185,129,0.15)',
-                line=dict(width=0), showlegend=False, hoverinfo='skip'
+            fig_regime.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Regime_Bear_Pct'],
+                mode='lines', name='Bear Regime %',
+                fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.3)',
+                line=dict(color='#ef4444', width=2)
             ))
             
-            fig_avg.add_trace(go.Scatter(
-                x=ts_df['Date'], y=ts_df['Avg_Signal'],
-                mode='lines+markers', name='Avg Signal',
-                line=dict(color='#FFC300', width=2),
-                marker=dict(size=6, color=colors)
-            ))
-            
-            fig_avg.add_hline(y=2, line=dict(color='rgba(239,68,68,0.5)', width=1, dash='dash'))
-            fig_avg.add_hline(y=-2, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
-            fig_avg.add_hline(y=0, line=dict(color='rgba(255,255,255,0.3)', width=1))
-            
-            fig_avg.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=400,
+            fig_regime.update_layout(
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
                 margin=dict(l=10, r=10, t=30, b=50),
                 xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-8, 8]),
+                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of ETFs', range=[0, 100]),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
                 font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
             )
-            st.plotly_chart(fig_avg, width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("##### Volatility Regime & Change Points Over Time")
+            
+            # Volatility regime chart
+            fig_vol = go.Figure()
+            
+            fig_vol.add_trace(go.Scatter(
+                x=ts_df['Date'], y=ts_df['Vol_High_Pct'],
+                mode='lines+markers', name='High Vol %',
+                line=dict(color='#f59e0b', width=2),
+                marker=dict(size=5)
+            ))
+            
+            fig_vol.add_trace(go.Bar(
+                x=ts_df['Date'], y=ts_df['Change_Points'],
+                name='Change Points',
+                marker=dict(color='#a855f7', opacity=0.7)
+            ))
+            
+            fig_vol.update_layout(
+                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
+                margin=dict(l=10, r=10, t=10, b=50),
+                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
+                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Count / %'),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
+                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
+            )
+            st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
             
             st.markdown("<br>", unsafe_allow_html=True)
             col_r1, col_r2 = st.columns(2)
             
             with col_r1:
-                st.markdown("##### Regime Statistics")
-                bullish_days = len(ts_df[ts_df['Avg_Signal'] < -2])
-                bearish_days = len(ts_df[ts_df['Avg_Signal'] > 2])
-                neutral_days = len(ts_df) - bullish_days - bearish_days
+                st.markdown("##### HMM Regime Statistics")
+                avg_bull = ts_df['Regime_Bull_Pct'].mean()
+                avg_bear = ts_df['Regime_Bear_Pct'].mean()
+                total_changes = ts_df['Change_Points'].sum()
                 
                 regime_stats = {
-                    "Regime": ["Bullish (< -2)", "Neutral (-2 to +2)", "Bearish (> +2)"],
-                    "Days": [bullish_days, neutral_days, bearish_days],
-                    "Percentage": [f"{bullish_days/len(ts_df)*100:.1f}%", f"{neutral_days/len(ts_df)*100:.1f}%", f"{bearish_days/len(ts_df)*100:.1f}%"]
+                    "Metric": ["Avg Bull Regime %", "Avg Bear Regime %", "Total Change Points", "Avg High Vol %"],
+                    "Value": [f"{avg_bull:.1f}%", f"{avg_bear:.1f}%", f"{int(total_changes)}", f"{ts_df['Vol_High_Pct'].mean():.1f}%"]
                 }
                 st.dataframe(pd.DataFrame(regime_stats), width="stretch", hide_index=True)
             
@@ -3292,12 +3533,14 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
         with tab4:
             st.markdown(f"##### Daily ETF Time Series Data ({len(ts_df)} trading days)")
             
-            display_ts = ts_df[['Date', 'Total_Analyzed', 'Oversold', 'Neutral', 'Overbought', 
-                               'Buy_Signals', 'Sell_Signals', 'Avg_Signal', 'Bull_Div', 'Bear_Div']].copy()
+            # Include regime data in display
+            display_ts = ts_df[['Date', 'Total_Analyzed', 'Oversold', 'Overbought', 
+                               'Buy_Signals', 'Sell_Signals', 'Avg_Signal', 
+                               'Regime_Bull', 'Regime_Bear', 'Change_Points']].copy()
             display_ts['Date'] = display_ts['Date'].dt.strftime('%Y-%m-%d')
             display_ts['Avg_Signal'] = display_ts['Avg_Signal'].round(2)
-            display_ts.columns = ['Date', 'ETFs', 'Oversold', 'Neutral', 'Overbought', 
-                                 'Buy Sig', 'Sell Sig', 'Avg Signal', 'Bull Div', 'Bear Div']
+            display_ts.columns = ['Date', 'ETFs', 'Oversold', 'Overbought', 
+                                 'Buy Sig', 'Sell Sig', 'Avg Sig', 'Bull Regime', 'Bear Regime', 'Changes']
             
             st.dataframe(display_ts, width="stretch", hide_index=True, height=500)
             
