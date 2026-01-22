@@ -1,5 +1,5 @@
 """
-NIRNAY (निर्णय) - Unified Market Analysis | A Pragyam Product Family Member
+NIRNAY (निर्णय) - Decision Intelligence | A Pragyam Product Family Member
 Quantitative Signal + Regime Intelligence System
 
 Combines:
@@ -30,7 +30,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ══════════════════════════════════════════════════════════════════════════════
 
 st.set_page_config(
-    page_title="NIRNAY | Unified Market Analysis",
+    page_title="NIRNAY | Decision Intelligence",
     layout="wide",
     initial_sidebar_state="expanded"
 )
