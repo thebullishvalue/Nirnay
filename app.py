@@ -1656,8 +1656,17 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                     has_buy = display_df['Buy_Signal'].iloc[-1]
                     has_sell = display_df['Sell_Signal'].iloc[-1]
                     
+                    # NEW: Get regime intelligence data
+                    curr_regime = display_df['Regime'].iloc[-1]
+                    curr_hmm_bull = display_df['HMM_Bull'].iloc[-1]
+                    curr_hmm_bear = display_df['HMM_Bear'].iloc[-1]
+                    curr_vol_regime = display_df['Vol_Regime'].iloc[-1]
+                    curr_change_point = display_df['Change_Point'].iloc[-1]
+                    curr_confidence = display_df['Confidence'].iloc[-1]
+                    
                     st.success("✅ Analysis Complete!")
                     
+                    # Row 1: Signal metrics
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         color_class = "success" if curr_condition == "Oversold" else "danger" if curr_condition == "Overbought" else "neutral"
@@ -1670,6 +1679,24 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                         price_color = "success" if price_change >= 0 else "danger"
                         st.markdown(f'<div class="metric-card {price_color}"><h4>Price</h4><h2>₹{curr_price:,.2f}</h2><div class="sub-metric">{"▲" if price_change >= 0 else "▼"} {abs(price_change):.2f}%</div></div>', unsafe_allow_html=True)
                     
+                    # Row 2: Regime Intelligence metrics (NEW)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        regime_color = "success" if "BULL" in curr_regime else "danger" if "BEAR" in curr_regime else "warning" if curr_regime == "TRANSITION" else "neutral"
+                        st.markdown(f'<div class="metric-card {regime_color}"><h4>HMM Regime</h4><h2 style="font-size: 1.3rem;">{curr_regime}</h2><div class="sub-metric">Confidence: {curr_confidence:.0%}</div></div>', unsafe_allow_html=True)
+                    with col2:
+                        vol_color = "danger" if curr_vol_regime in ["HIGH", "EXTREME"] else "success" if curr_vol_regime == "LOW" else "neutral"
+                        st.markdown(f'<div class="metric-card {vol_color}"><h4>Volatility Regime</h4><h2 style="font-size: 1.3rem;">{curr_vol_regime}</h2><div class="sub-metric">GARCH-based</div></div>', unsafe_allow_html=True)
+                    with col3:
+                        st.markdown(f'<div class="metric-card success"><h4>P(Bull)</h4><h2>{curr_hmm_bull:.0%}</h2><div class="sub-metric">HMM State</div></div>', unsafe_allow_html=True)
+                    with col4:
+                        st.markdown(f'<div class="metric-card danger"><h4>P(Bear)</h4><h2>{curr_hmm_bear:.0%}</h2><div class="sub-metric">HMM State</div></div>', unsafe_allow_html=True)
+                    
+                    # Change point alert (NEW)
+                    if curr_change_point:
+                        st.markdown('<span class="status-badge regime">⚠️ CHANGE POINT DETECTED - Regime Transition</span>', unsafe_allow_html=True)
+                    
                     if has_buy or has_sell:
                         st.markdown("<br>", unsafe_allow_html=True)
                         if has_buy:
@@ -1678,7 +1705,7 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                             st.markdown('<span class="status-badge sell">◉ CONFIRMED SELL SIGNAL</span>', unsafe_allow_html=True)
                     
                     st.markdown("<br>", unsafe_allow_html=True)
-                    tab1, tab2 = st.tabs(["**Price & Oscillator**", "**Signal Components**"])
+                    tab1, tab2, tab3 = st.tabs(["**Price & Oscillator**", "**Signal Components**", "**Regime Intelligence**"])
                     
                     with tab1:
                         st.plotly_chart(create_price_chart(display_df, target_symbol), width="stretch", config={'displayModeBar': False})
@@ -1699,6 +1726,56 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                                     st.markdown(f'<div style="margin-bottom: 0.75rem;"><div style="display: flex; justify-content: space-between; font-size: 0.85rem;"><span style="color: #EAEAEA;">{d["Name"]}</span><span style="color: {color}; font-weight: 600;">{corr:+.3f}</span></div><div class="conviction-meter"><div class="conviction-fill" style="width: {pct}%; background: {color};"></div></div></div>', unsafe_allow_html=True)
                             else:
                                 st.info("No macro correlations available")
+                    
+                    with tab3:
+                        # NEW: Regime Intelligence Tab
+                        st.markdown("##### HMM State Probabilities Over Time")
+                        
+                        # Create HMM probability chart
+                        fig_hmm = go.Figure()
+                        fig_hmm.add_trace(go.Scatter(x=display_df.index, y=display_df['HMM_Bull'], mode='lines', name='P(Bull)', line=dict(color='#10b981', width=2), fill='tozeroy', fillcolor='rgba(16,185,129,0.2)'))
+                        fig_hmm.add_trace(go.Scatter(x=display_df.index, y=display_df['HMM_Bear'], mode='lines', name='P(Bear)', line=dict(color='#ef4444', width=2), fill='tozeroy', fillcolor='rgba(239,68,68,0.2)'))
+                        fig_hmm.add_hline(y=0.5, line_dash='dash', line_color='#888888')
+                        fig_hmm.update_layout(template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=250, margin=dict(l=10, r=10, t=10, b=10), yaxis=dict(range=[0, 1], showgrid=True, gridcolor='#2A2A2A'), xaxis=dict(showgrid=True, gridcolor='#2A2A2A'), legend=dict(orientation='h', y=1.1), hovermode='x unified')
+                        st.plotly_chart(fig_hmm, use_container_width=True, config={'displayModeBar': False})
+                        
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            st.markdown("##### Regime Timeline")
+                            # Create regime color mapping
+                            regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
+                            regime_vals = display_df['Regime'].map(lambda x: regime_colors.get(x, '#888888'))
+                            
+                            # Count regimes
+                            regime_counts = display_df['Regime'].value_counts()
+                            fig_regime = go.Figure(go.Pie(
+                                labels=regime_counts.index, values=regime_counts.values, hole=0.5,
+                                marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
+                                textinfo='label+percent', textfont=dict(size=10, color='white')
+                            ))
+                            fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=250, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
+                            st.plotly_chart(fig_regime, use_container_width=True, config={'displayModeBar': False})
+                        
+                        with c2:
+                            st.markdown("##### Volatility Regime Distribution")
+                            vol_counts = display_df['Vol_Regime'].value_counts()
+                            vol_colors = {'LOW': '#10b981', 'NORMAL': '#888888', 'HIGH': '#f59e0b', 'EXTREME': '#ef4444'}
+                            fig_vol = go.Figure(go.Pie(
+                                labels=vol_counts.index, values=vol_counts.values, hole=0.5,
+                                marker=dict(colors=[vol_colors.get(v, '#888888') for v in vol_counts.index], line=dict(color='#1A1A1A', width=2)),
+                                textinfo='label+percent', textfont=dict(size=10, color='white')
+                            ))
+                            fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=250, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
+                            st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
+                        
+                        # Change points
+                        change_points = display_df[display_df['Change_Point'] == True]
+                        if len(change_points) > 0:
+                            st.markdown(f"##### Change Points Detected: {len(change_points)}")
+                            st.dataframe(change_points[['Close', 'Unified_Osc', 'Regime', 'Vol_Regime']].tail(10), use_container_width=True)
+                        else:
+                            st.info("No change points detected in this period")
+                        
                 except Exception as e:
                     st.error(f"Analysis Error: {str(e)}")
             else:
@@ -1785,7 +1862,14 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         "Zone": last_row['Condition'],
                         "Trigger": signal_str,
                         "Divergence": div_str,
-                        "Agreement": round(last_row['Agreement'], 3)
+                        "Agreement": round(last_row['Agreement'], 3),
+                        # NEW: Regime Intelligence columns
+                        "Regime": last_row['Regime'],
+                        "HMM_Bull": round(last_row['HMM_Bull'], 2),
+                        "HMM_Bear": round(last_row['HMM_Bear'], 2),
+                        "Vol_Regime": last_row['Vol_Regime'],
+                        "Confidence": round(last_row['Confidence'], 2),
+                        "Change_Point": last_row['Change_Point']
                     })
                 except Exception:
                     pass
@@ -1805,8 +1889,12 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             n_sells = len(results_df[results_df['Trigger'] == 'SELL'])
             avg_signal = results_df['Signal'].mean()
             
-            regime = "BULLISH BIAS" if avg_signal < -2 else "BEARISH BIAS" if avg_signal > 2 else "NEUTRAL"
-            regime_color = "success" if avg_signal < -2 else "danger" if avg_signal > 2 else "neutral"
+            # NEW: Calculate HMM regime distribution
+            n_bull = len(results_df[results_df['Regime'].str.contains('BULL', na=False)])
+            n_bear = len(results_df[results_df['Regime'].str.contains('BEAR', na=False)])
+            n_transition = len(results_df[results_df['Regime'] == 'TRANSITION'])
+            dominant_regime = results_df['Regime'].mode().iloc[0] if len(results_df) > 0 else "NEUTRAL"
+            regime_color = "success" if "BULL" in dominant_regime else "danger" if "BEAR" in dominant_regime else "warning" if dominant_regime == "TRANSITION" else "neutral"
             
             # Metrics row
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1822,12 +1910,12 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             with c5:
                 st.markdown(f'<div class="metric-card warning"><h4>Sell Signals</h4><h2>{n_sells}</h2><div class="sub-metric">Confirmed</div></div>', unsafe_allow_html=True)
             with c6:
-                st.markdown(f'<div class="metric-card {regime_color}"><h4>Regime</h4><h2 style="font-size: 1.1rem;">{regime}</h2><div class="sub-metric">Avg: {avg_signal:.2f}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-card {regime_color}"><h4>HMM Regime</h4><h2 style="font-size: 1.1rem;">{dominant_regime}</h2><div class="sub-metric">Bull: {n_bull} | Bear: {n_bear}</div></div>', unsafe_allow_html=True)
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
             
-            # Tabs for different views
-            tab1, tab2, tab3, tab4 = st.tabs(["**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**📋 Full Data**"])
+            # Tabs for different views - ADD 5th tab for Regime
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**🎯 Regime Analysis**", "**📋 Full Data**"])
             
             with tab1:
                 col_buy, col_sell = st.columns(2)
@@ -1948,6 +2036,63 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                     st.dataframe(top_losers, width="stretch", hide_index=True)
             
             with tab4:
+                # NEW: Regime Intelligence Analysis Tab
+                st.markdown("##### HMM Regime Distribution")
+                c1, c2 = st.columns(2)
+                
+                with c1:
+                    regime_counts = results_df['Regime'].value_counts()
+                    regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
+                    fig_regime = go.Figure(go.Pie(
+                        labels=regime_counts.index, values=regime_counts.values, hole=0.5,
+                        marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
+                        textinfo='label+percent', textfont=dict(size=11, color='white')
+                    ))
+                    fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='HMM Regime', font=dict(size=14, color='#888888')))
+                    st.plotly_chart(fig_regime, use_container_width=True, config={'displayModeBar': False})
+                
+                with c2:
+                    vol_counts = results_df['Vol_Regime'].value_counts()
+                    vol_colors = {'LOW': '#10b981', 'NORMAL': '#888888', 'HIGH': '#f59e0b', 'EXTREME': '#ef4444'}
+                    fig_vol = go.Figure(go.Pie(
+                        labels=vol_counts.index, values=vol_counts.values, hole=0.5,
+                        marker=dict(colors=[vol_colors.get(v, '#888888') for v in vol_counts.index], line=dict(color='#1A1A1A', width=2)),
+                        textinfo='label+percent', textfont=dict(size=11, color='white')
+                    ))
+                    fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='Volatility Regime (GARCH)', font=dict(size=14, color='#888888')))
+                    st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
+                
+                st.markdown("##### Regime Breakdown by ETF")
+                
+                # Bull regime ETFs
+                col_bull, col_bear = st.columns(2)
+                with col_bull:
+                    st.markdown('<span class="status-badge buy">BULLISH REGIME ETFs</span>', unsafe_allow_html=True)
+                    bull_etfs = results_df[results_df['Regime'].str.contains('BULL', na=False)].sort_values('HMM_Bull', ascending=False)
+                    if len(bull_etfs) > 0:
+                        for _, row in bull_etfs.head(10).iterrows():
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #10b981;">P(Bull): {row["HMM_Bull"]:.0%}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.info("No ETFs in bullish regime")
+                
+                with col_bear:
+                    st.markdown('<span class="status-badge sell">BEARISH REGIME ETFs</span>', unsafe_allow_html=True)
+                    bear_etfs = results_df[results_df['Regime'].str.contains('BEAR', na=False)].sort_values('HMM_Bear', ascending=False)
+                    if len(bear_etfs) > 0:
+                        for _, row in bear_etfs.head(10).iterrows():
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #ef4444;">P(Bear): {row["HMM_Bear"]:.0%}</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.info("No ETFs in bearish regime")
+                
+                # Change points
+                change_point_etfs = results_df[results_df['Change_Point'] == True]
+                if len(change_point_etfs) > 0:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown('<span class="status-badge regime">⚠️ CHANGE POINTS DETECTED</span>', unsafe_allow_html=True)
+                    for _, row in change_point_etfs.iterrows():
+                        st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • Regime Transition</span></div><span class="symbol-score" style="color: #a855f7;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+            
+            with tab5:
                 st.markdown(f"##### Complete ETF Scan Results ({len(results_df)} ETFs) - {analysis_date_str}")
                 
                 # Filter options
@@ -1957,7 +2102,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                 with filter_col2:
                     signal_filter = st.multiselect("Filter by Trigger", ["BUY", "SELL", "-"], default=["BUY", "SELL", "-"], key="etf_signal_filter")
                 with filter_col3:
-                    sort_by = st.selectbox("Sort by", ["Signal", "Change", "Price", "DisplayName"], index=0, key="etf_sort_by")
+                    sort_by = st.selectbox("Sort by", ["Signal", "Change", "Price", "DisplayName", "Regime", "Confidence"], index=0, key="etf_sort_by")
                 
                 # Apply filters
                 filtered_df = results_df[
@@ -1965,9 +2110,10 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                     (results_df['Trigger'].isin(signal_filter))
                 ].sort_values(sort_by, ascending=(sort_by == 'DisplayName'))
                 
-                display_cols = ['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'MMR', 'Zone', 'Trigger', 'Divergence']
+                # Updated display columns with Regime Intelligence
+                display_cols = ['DisplayName', 'Price', 'Change', 'Signal', 'Zone', 'Trigger', 'Regime', 'Vol_Regime', 'Confidence']
                 display_df = filtered_df[display_cols].copy()
-                display_df.columns = ['ETF', 'Price', 'Chg %', 'Signal', 'MSF', 'MMR', 'Zone', 'Trigger', 'Divergence']
+                display_df.columns = ['ETF', 'Price', 'Chg %', 'Signal', 'Zone', 'Trigger', 'HMM Regime', 'Vol Regime', 'Conf']
                 
                 st.dataframe(display_df, width="stretch", hide_index=True, height=400)
                 
