@@ -1039,104 +1039,6 @@ def run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight):
     return df, drivers
 
 
-def run_msf_only_analysis(df, length, roc_len):
-    """Run MSF-only analysis with regime intelligence (no MMR for speed, but includes HMM/GARCH/CUSUM)"""
-    df['MSF'], df['Micro'], df['Momentum'], df['Flow'] = calculate_msf(df, length, roc_len)
-    
-    df['Unified'] = df['MSF']  # MSF is the unified signal when no MMR
-    df['Unified_Osc'] = df['MSF'] * 10
-    df['MSF_Osc'] = df['MSF'] * 10
-    df['MMR_Osc'] = 0  # No MMR in spread screener
-    
-    df['Buy_Signal'] = df['Unified_Osc'] < -5
-    df['Sell_Signal'] = df['Unified_Osc'] > 5
-    
-    osc_rising = df['Unified_Osc'] > df['Unified_Osc'].shift(1)
-    price_falling = df['Close'] < df['Close'].shift(1)
-    osc_falling = df['Unified_Osc'] < df['Unified_Osc'].shift(1)
-    price_rising = df['Close'] > df['Close'].shift(1)
-
-    df['Bullish_Div'] = osc_rising & price_falling & (df['Unified_Osc'] < -5)
-    df['Bearish_Div'] = osc_falling & price_rising & (df['Unified_Osc'] > 5)
-    
-    conditions = []
-    for val in df['Unified_Osc']:
-        if val < -5:
-            conditions.append("Oversold")
-        elif val > 5:
-            conditions.append("Overbought")
-        else:
-            conditions.append("Neutral")
-    df['Condition'] = conditions
-    df['Agreement'] = df['MSF'] ** 2  # Self-agreement
-
-    # === REGIME INTELLIGENCE (same as run_full_analysis) ===
-    hmm = AdaptiveHMM()
-    garch = GARCHDetector()
-    cusum = CUSUMDetector()
-    kalman = AdaptiveKalmanFilter()
-    
-    regimes = []
-    hmm_bulls = []
-    hmm_bears = []
-    vol_regimes = []
-    change_points = []
-    confidences = []
-    signal_history = []
-    
-    unified_vals = df['Unified'].values
-    
-    for i in range(len(df)):
-        sig = unified_vals[i] if not np.isnan(unified_vals[i]) else 0
-        
-        # Kalman filter for smoothing
-        filtered = kalman.update(sig)
-        
-        # GARCH for volatility regime
-        shock = sig - signal_history[-1] if signal_history else 0
-        garch.update(shock)
-        vol_regime, _ = garch.get_regime()
-        
-        # HMM for market state
-        hmm_probs = hmm.update(filtered)
-        
-        # CUSUM for change point detection
-        change = cusum.update(filtered)
-        
-        # Determine regime
-        bull_p = hmm_probs['BULL']
-        bear_p = hmm_probs['BEAR']
-        
-        if change:
-            regime = "TRANSITION"
-        elif bull_p > 0.6:
-            regime = "BULL"
-        elif bear_p > 0.6:
-            regime = "BEAR"
-        elif bull_p > 0.4:
-            regime = "WEAK_BULL"
-        elif bear_p > 0.4:
-            regime = "WEAK_BEAR"
-        else:
-            regime = "NEUTRAL"
-        
-        regimes.append(regime)
-        hmm_bulls.append(bull_p)
-        hmm_bears.append(bear_p)
-        vol_regimes.append(vol_regime)
-        change_points.append(change)
-        confidences.append(max(bull_p, bear_p, hmm_probs['NEUTRAL']))
-        signal_history.append(sig)
-    
-    df['Regime'] = regimes
-    df['HMM_Bull'] = hmm_bulls
-    df['HMM_Bear'] = hmm_bears
-    df['Vol_Regime'] = vol_regimes
-    df['Change_Point'] = change_points
-    df['Confidence'] = confidences
-
-    return df
-
 # ══════════════════════════════════════════════════════════════════════════════
 # CHART FUNCTIONS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1684,9 +1586,9 @@ def main():
     elif "Market" in mode:
         # Market Screener (F&O / Index universe)
         if spread_mode and "Time Series" in spread_mode:
-            run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, spread_start_date, spread_end_date)
+            run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_start_date, spread_end_date)
         else:
-            run_market_screener_mode(length, roc_len, spread_universe, spread_index, spread_date)
+            run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date)
     elif "Chart" in mode:
         run_chart_mode(length, roc_len, regime_sensitivity, base_weight)
     
@@ -2195,8 +2097,8 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             st.warning("No data retrieved. Please check your internet connection.")
 
 
-def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spread_date):
-    """Market Screener: NIRNAY analysis on F&O / Index stocks"""
+def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date):
+    """Market Screener: Full NIRNAY analysis (MSF + MMR + Regime) on F&O / Index stocks"""
     
     # Format analysis date
     analysis_date = spread_date if spread_date else datetime.date.today()
@@ -2209,7 +2111,7 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
         st.markdown(f"""
         <div class='info-box'>
             <h4>📊 Market Screener - {universe_title}</h4>
-            <p>MSF-based signal analysis across all F&O securities from NSE.<br>
+            <p>Full NIRNAY (MSF + MMR + Regime) analysis across all F&O securities from NSE.<br>
             <strong>Analysis Date:</strong> {analysis_date_str} {"(Today)" if is_today else ""}</p>
         </div>
         """, unsafe_allow_html=True)
@@ -2218,7 +2120,7 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
         st.markdown(f"""
         <div class='info-box'>
             <h4>📊 Market Screener - {universe_title}</h4>
-            <p>MSF-based signal analysis across all constituents of {universe_title}.<br>
+            <p>Full NIRNAY (MSF + MMR + Regime) analysis across all constituents of {universe_title}.<br>
             <strong>Analysis Date:</strong> {analysis_date_str} {"(Today)" if is_today else ""}</p>
         </div>
         """, unsafe_allow_html=True)
@@ -2253,7 +2155,7 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
         
         # Batch download data
         status_text.markdown(f"**⏳ Downloading data for {total_stocks} stocks...**")
-        progress_bar.progress(0.1)
+        progress_bar.progress(0.05)
         
         data_dict, batch_msg = fetch_batch_data(stock_list, end_date=analysis_date, days_back=100)
         
@@ -2264,6 +2166,11 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
             return
         
         st.toast(batch_msg, icon="📥")
+        
+        # Fetch macro data ONCE for all stocks (VIX, DXY, rates are market-wide)
+        status_text.markdown("**⏳ Fetching macro data for MMR analysis...**")
+        progress_bar.progress(0.1)
+        macro_df = fetch_macro_data(days_back=100)
         
         # Process each stock
         results = []
@@ -2278,13 +2185,14 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
             
             if df is not None and len(df) > length + 5:
                 try:
-                    # Run MSF-only analysis (faster for large universes)
-                    df = run_msf_only_analysis(df, length, roc_len)
-                    
-                    # Find the row for the analysis date
+                    # Merge macro data with stock data for MMR
                     df.index = pd.to_datetime(df.index)
                     if df.index.tz is not None:
                         df.index = df.index.tz_localize(None)
+                    df = df.join(macro_df, how='left').ffill()
+                    
+                    # Run FULL analysis (MSF + MMR + Regime Intelligence)
+                    df, _ = run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight)
                     
                     # Get the closest date on or before analysis_date
                     analysis_datetime = pd.Timestamp(analysis_date)
@@ -2313,7 +2221,7 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
                         "Change": round(price_change, 2),
                         "Signal": round(last_row['Unified_Osc'], 2),
                         "MSF": round(last_row['MSF_Osc'], 2),
-                        "MMR": 0.0,
+                        "MMR": round(last_row['MMR_Osc'], 2),  # Now populated with actual MMR
                         "Zone": last_row['Condition'],
                         "Trigger": signal_str,
                         "Divergence": div_str,
@@ -2583,8 +2491,8 @@ def run_market_screener_mode(length, roc_len, spread_universe, spread_index, spr
             st.warning("No data retrieved. Please check your internet connection or try a different universe.")
 
 
-def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, start_date, end_date):
-    """Market Time Series Analysis: Track overbought/oversold signals over time"""
+def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, start_date, end_date):
+    """Market Time Series Analysis: Full NIRNAY (MSF + MMR + Regime) tracking over time"""
     
     # Validate dates
     if start_date is None or end_date is None:
@@ -2607,7 +2515,7 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
     st.markdown(f"""
     <div class='info-box'>
         <h4>📈 Time Series Analysis - {universe_title}</h4>
-        <p>Track overbought/oversold signal distribution over time.<br>
+        <p>Full NIRNAY (MSF + MMR + Regime) signal distribution over time.<br>
         <strong>Period:</strong> {start_date.strftime("%d %b %Y")} to {end_date.strftime("%d %b %Y")} ({date_range_days} days)</p>
     </div>
     """, unsafe_allow_html=True)
@@ -2649,9 +2557,14 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
         
         st.toast(batch_msg, icon="📥")
         
+        # Fetch macro data ONCE for all stocks (VIX, DXY, rates are market-wide)
+        status_text.markdown("**⏳ Fetching macro data for MMR analysis...**")
+        progress_bar.progress(0.1)
+        macro_df = fetch_macro_data(days_back=100 + date_range_days)
+        
         # Generate list of trading days to analyze
         status_text.markdown("**⏳ Identifying trading days...**")
-        progress_bar.progress(0.1)
+        progress_bar.progress(0.12)
         
         # Use one of the stocks to identify trading days
         sample_ticker = list(data_dict.keys())[0]
@@ -2685,8 +2598,8 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
         
         st.toast(f"Found {len(trading_days)} trading days", icon="📅")
         
-        # Process MSF for all stocks once
-        status_text.markdown("**⏳ Computing MSF signals for all stocks...**")
+        # Process FULL analysis for all stocks (MSF + MMR + Regime)
+        status_text.markdown("**⏳ Computing MSF + MMR + Regime signals for all stocks...**")
         progress_bar.progress(0.15)
         
         processed_data = {}
@@ -2696,10 +2609,14 @@ def run_market_timeseries_mode(length, roc_len, spread_universe, spread_index, s
             df = data_dict[ticker]
             if df is not None and len(df) > length + 5:
                 try:
-                    df = run_msf_only_analysis(df, length, roc_len)
+                    # Merge macro data with stock data for MMR
                     df.index = pd.to_datetime(df.index)
                     if df.index.tz is not None:
                         df.index = df.index.tz_localize(None)
+                    df = df.join(macro_df, how='left').ffill()
+                    
+                    # Run FULL analysis (MSF + MMR + Regime Intelligence)
+                    df, _ = run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight)
                     processed_data[ticker] = df
                 except Exception:
                     pass
