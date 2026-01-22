@@ -14,7 +14,6 @@ Version: 1.0.0
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import pandas_datareader.data as web
 import requests
 import io
 from datetime import datetime, timedelta
@@ -205,6 +204,22 @@ def get_universe_symbols(universe_type: str, index_name: str = None) -> Tuple[Li
 # MACRO DATA FETCHING
 # ══════════════════════════════════════════════════════════════════════════════
 
+def fetch_stooq_data(symbol: str, start_date: datetime, end_date: datetime) -> Optional[pd.Series]:
+    """Fetch single symbol from Stooq via direct URL"""
+    try:
+        url = f"https://stooq.com/q/d/l/?s={symbol}&d1={start_date.strftime('%Y%m%d')}&d2={end_date.strftime('%Y%m%d')}"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200 and len(response.text) > 50:
+            df = pd.read_csv(io.StringIO(response.text))
+            if 'Date' in df.columns and 'Close' in df.columns:
+                df['Date'] = pd.to_datetime(df['Date'])
+                df = df.set_index('Date').sort_index()
+                return df['Close']
+    except Exception as e:
+        logging.debug(f"Stooq fetch failed for {symbol}: {e}")
+    return None
+
+
 def fetch_macro_data(days_back: int = 100) -> pd.DataFrame:
     """
     Fetch macro indicator data from Stooq (bonds) and Yahoo Finance (forex, commodities).
@@ -217,16 +232,11 @@ def fetch_macro_data(days_back: int = 100) -> pd.DataFrame:
     
     macro_df = pd.DataFrame()
     
-    # Fetch from Stooq (bonds)
-    stooq_symbols = list(MACRO_SYMBOLS_STOOQ.values())
-    try:
-        stooq_data = web.DataReader(stooq_symbols, 'stooq', start_date, end_date)
-        if 'Close' in stooq_data.columns.get_level_values(0):
-            stooq_close = stooq_data['Close']
-            stooq_close = stooq_close.sort_index()
-            macro_df = pd.concat([macro_df, stooq_close], axis=1)
-    except Exception as e:
-        logging.warning(f"Stooq fetch failed: {e}")
+    # Fetch from Stooq (bonds) - using direct requests
+    for name, symbol in MACRO_SYMBOLS_STOOQ.items():
+        series = fetch_stooq_data(symbol, start_date, end_date)
+        if series is not None and len(series) > 0:
+            macro_df[symbol] = series
     
     # Fetch from Yahoo Finance (forex, commodities)
     yf_symbols = list(MACRO_SYMBOLS_YF.values())
