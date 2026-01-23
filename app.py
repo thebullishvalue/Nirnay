@@ -31,6 +31,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 st.set_page_config(
     page_title="NIRNAY | Unified Market Analysis",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
