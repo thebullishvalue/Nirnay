@@ -31,7 +31,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 st.set_page_config(
     page_title="NIRNAY | Unified Market Analysis",
-    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -1246,7 +1245,7 @@ def create_ranking_chart(results_df, top_n=10):
 def render_header():
     st.markdown("""
     <div class="premium-header">
-        <h1>NIRNAY | Unified Market Analysis</h1>
+        <h1>NIRNAY : Unified Market Analysis</h1>
         <div class="tagline">Quantitative Signal + Regime Intelligence System</div>
     </div>
     """, unsafe_allow_html=True)
@@ -1593,7 +1592,7 @@ def main():
         run_chart_mode(length, roc_len, regime_sensitivity, base_weight)
     
     # Dynamic footer with current IST time
-    utc_now = datetime.datetime.utcnow()
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
     ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
     current_time_ist = ist_now.strftime("%Y-%m-%d %H:%M:%S IST")
     
