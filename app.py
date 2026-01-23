@@ -35,8 +35,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-VERSION = "v1.1.0 - Curation Engine"
-LAST_UPDATED = "2026-01-23 05:42:41 IST"
+VERSION = "v1.1.0"
+PRODUCT_NAME = "Nirnay"
+COMPANY = "Hemrek Capital"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PRAGYAM DESIGN SYSTEM CSS
@@ -1590,8 +1591,13 @@ def main():
     elif "Chart" in mode:
         run_chart_mode(length, roc_len, regime_sensitivity, base_weight)
     
+    # Dynamic footer with current IST time
+    utc_now = datetime.datetime.utcnow()
+    ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
+    current_time_ist = ist_now.strftime("%Y-%m-%d %H:%M:%S IST")
+    
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.caption(f"© 2026 Nirnay | Hemrek Capital | {VERSION} | Last Updated: {LAST_UPDATED}")
+    st.caption(f"© 2026 {PRODUCT_NAME} | {COMPANY} | {VERSION} | {current_time_ist}")
 
 
 def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
@@ -1630,7 +1636,7 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                     curr_change_point = display_df['Change_Point'].iloc[-1]
                     curr_confidence = display_df['Confidence'].iloc[-1]
                     
-                    st.success("✅ Analysis Complete!")
+                    st.toast("Analysis Complete!", icon="✅")
                     
                     # Row 1: Signal metrics
                     col1, col2, col3, col4 = st.columns(4)
@@ -1844,7 +1850,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
         status_text.empty()
         
         if results:
-            st.success(f"✅ ETF Scan Complete! Analyzed {len(results)}/{total} ETFs for {analysis_date_str}")
+            st.toast(f"ETF Scan Complete! Analyzed {len(results)}/{total} ETFs", icon="✅")
             results_df = pd.DataFrame(results)
             
             # Calculate summary stats
@@ -2239,7 +2245,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
         status_text.empty()
         
         if results:
-            st.success(f"✅ Market Scan Complete! Analyzed {len(results)}/{total_stocks} stocks for {analysis_date_str}")
+            st.toast(f"Market Scan Complete! Analyzed {len(results)}/{total_stocks} stocks", icon="✅")
             results_df = pd.DataFrame(results)
             
             # Calculate summary stats
@@ -2588,11 +2594,11 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         
         if end_date == datetime.date.today():
             if is_today_included:
-                st.info(f"🔴 **Live Data Included** - Analysis includes today's market data ({actual_last_date.strftime('%d %b %Y')})")
+                st.toast(f"Live Data Included - {actual_last_date.strftime('%d %b %Y')}", icon="🔴")
             else:
-                st.warning(f"⚠️ Today's data not yet available (market may be closed or data delayed). Analysis runs through **{actual_last_date.strftime('%d %b %Y')}**.")
+                st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
         elif actual_last_date and actual_last_date < end_date:
-            st.warning(f"⚠️ Data for **{end_date.strftime('%d %b %Y')}** is not available. Analysis will run through **{actual_last_date.strftime('%d %b %Y')}** (latest available).")
+            st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
         
         st.toast(f"Found {len(trading_days)} trading days", icon="📅")
         
@@ -2735,7 +2741,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         # Show actual analyzed date range
         actual_start = ts_df['Date'].min().strftime('%d %b %Y')
         actual_end = ts_df['Date'].max().strftime('%d %b %Y')
-        st.success(f"✅ Time Series Analysis Complete! Analyzed {len(ts_df)} trading days ({actual_start} to {actual_end})")
+        st.toast(f"Time Series Complete! {len(ts_df)} days ({actual_start} to {actual_end})", icon="✅")
         
         # Summary metrics
         st.markdown("<br>", unsafe_allow_html=True)
@@ -3134,11 +3140,11 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
         
         if end_date == datetime.date.today():
             if is_today_included:
-                st.info(f"🔴 **Live Data Included** - Analysis includes today's market data ({actual_last_date.strftime('%d %b %Y')})")
+                st.toast(f"Live Data Included - {actual_last_date.strftime('%d %b %Y')}", icon="🔴")
             else:
-                st.warning(f"⚠️ Today's data not yet available (market may be closed or data delayed). Analysis runs through **{actual_last_date.strftime('%d %b %Y')}**.")
+                st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
         elif actual_last_date and actual_last_date < end_date:
-            st.warning(f"⚠️ Data for **{end_date.strftime('%d %b %Y')}** is not available. Analysis will run through **{actual_last_date.strftime('%d %b %Y')}** (latest available).")
+            st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
         
         st.toast(f"Found {len(trading_days)} trading days", icon="📅")
         
@@ -3254,7 +3260,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
         # Show actual analyzed date range
         actual_start = ts_df['Date'].min().strftime('%d %b %Y')
         actual_end = ts_df['Date'].max().strftime('%d %b %Y')
-        st.success(f"✅ ETF Time Series Analysis Complete! Analyzed {len(ts_df)} trading days ({actual_start} to {actual_end})")
+        st.toast(f"ETF Time Series Complete! {len(ts_df)} days ({actual_start} to {actual_end})", icon="✅")
         
         # Summary metrics
         st.markdown("<br>", unsafe_allow_html=True)
