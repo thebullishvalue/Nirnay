@@ -1,5 +1,5 @@
 """
-NIRNAY (निर्णय) - Decision Intelligence | A Pragyam Product Family Member
+NIRNAY (निर्णय) - Unified Market Analysis | A Pragyam Product Family Member
 Quantitative Signal + Regime Intelligence System
 
 Combines:
@@ -30,12 +30,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ══════════════════════════════════════════════════════════════════════════════
 
 st.set_page_config(
-    page_title="NIRNAY | Decision Intelligence",
+    page_title="NIRNAY | Unified Market Analysis",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-VERSION = "v1.0.0 - Unified Intelligence"
+VERSION = "v1.1.0 - Curation Engine"
+LAST_UPDATED = "2026-01-23 05:42:41 IST"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PRAGYAM DESIGN SYSTEM CSS
@@ -961,15 +962,9 @@ def run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight):
     df['Bullish_Div'] = osc_rising & price_falling & (df['Unified_Osc'] < -5)
     df['Bearish_Div'] = osc_falling & price_rising & (df['Unified_Osc'] > 5)
     
-    conditions = []
-    for val in df['Unified_Osc']:
-        if val < -5:
-            conditions.append("Oversold")
-        elif val > 5:
-            conditions.append("Overbought")
-        else:
-            conditions.append("Neutral")
-    df['Condition'] = conditions
+    # Vectorized condition assignment (faster than loop)
+    df['Condition'] = np.where(df['Unified_Osc'] < -5, 'Oversold', 
+                               np.where(df['Unified_Osc'] > 5, 'Overbought', 'Neutral'))
     
     # === REGIME INTELLIGENCE (from AVASTHA) ===
     hmm = AdaptiveHMM()
@@ -1249,7 +1244,7 @@ def create_ranking_chart(results_df, top_n=10):
 def render_header():
     st.markdown("""
     <div class="premium-header">
-        <h1>NIRNAY | Decision Intelligence</h1>
+        <h1>NIRNAY : Unified Market Analysis</h1>
         <div class="tagline">Quantitative Signal + Regime Intelligence System</div>
     </div>
     """, unsafe_allow_html=True)
@@ -1573,7 +1568,10 @@ def run_home_page():
 
 def main():
     mode, length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, spread_mode, spread_start_date, spread_end_date, etf_mode, etf_date, etf_start_date, etf_end_date = render_sidebar()
-    render_header()
+    
+    # Only show main header on Home page
+    if "Home" in mode:
+        render_header()
     
     if "Home" in mode:
         run_home_page()
@@ -1593,7 +1591,7 @@ def main():
         run_chart_mode(length, roc_len, regime_sensitivity, base_weight)
     
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.caption(f"NIRNAY | A Pragyam Product | {VERSION}")
+    st.caption(f"© 2026 Nirnay | Hemrek Capital | {VERSION} | Last Updated: {LAST_UPDATED}")
 
 
 def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
@@ -1673,30 +1671,10 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                             st.markdown('<span class="status-badge sell">◉ CONFIRMED SELL SIGNAL</span>', unsafe_allow_html=True)
                     
                     st.markdown("<br>", unsafe_allow_html=True)
-                    tab1, tab2, tab3 = st.tabs(["**Price & Oscillator**", "**Signal Components**", "**Regime Intelligence**"])
-                    
-                    with tab1:
-                        st.plotly_chart(create_price_chart(display_df, target_symbol), width="stretch", config={'displayModeBar': False})
-                        st.plotly_chart(create_oscillator_chart(display_df), width="stretch", config={'displayModeBar': False})
-                    
-                    with tab2:
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.markdown("##### Signal Gauge")
-                            st.plotly_chart(create_gauge_chart(curr_unified), width="stretch", config={'displayModeBar': False})
-                        with c2:
-                            st.markdown("##### Top Macro Drivers")
-                            if drivers:
-                                for d in sorted(drivers, key=lambda x: abs(x['Correlation']), reverse=True):
-                                    corr = d['Correlation']
-                                    color = '#10b981' if corr > 0 else '#ef4444'
-                                    pct = abs(corr) * 100
-                                    st.markdown(f'<div style="margin-bottom: 0.75rem;"><div style="display: flex; justify-content: space-between; font-size: 0.85rem;"><span style="color: #EAEAEA;">{d["Name"]}</span><span style="color: {color}; font-weight: 600;">{corr:+.3f}</span></div><div class="conviction-meter"><div class="conviction-fill" style="width: {pct}%; background: {color};"></div></div></div>', unsafe_allow_html=True)
-                            else:
-                                st.info("No macro correlations available")
+                    tab3, tab1, tab2 = st.tabs(["**🎯 Regime Intelligence**", "**📈 Price & Oscillator**", "**📊 Signal Components**"])
                     
                     with tab3:
-                        # NEW: Regime Intelligence Tab
+                        # Regime Intelligence Tab (FIRST)
                         st.markdown("##### HMM State Probabilities Over Time")
                         
                         # Create HMM probability chart
@@ -1743,6 +1721,26 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                             st.dataframe(change_points[['Close', 'Unified_Osc', 'Regime', 'Vol_Regime']].tail(10), use_container_width=True)
                         else:
                             st.info("No change points detected in this period")
+                    
+                    with tab1:
+                        st.plotly_chart(create_price_chart(display_df, target_symbol), width="stretch", config={'displayModeBar': False})
+                        st.plotly_chart(create_oscillator_chart(display_df), width="stretch", config={'displayModeBar': False})
+                    
+                    with tab2:
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            st.markdown("##### Signal Gauge")
+                            st.plotly_chart(create_gauge_chart(curr_unified), width="stretch", config={'displayModeBar': False})
+                        with c2:
+                            st.markdown("##### Top Macro Drivers")
+                            if drivers:
+                                for d in sorted(drivers, key=lambda x: abs(x['Correlation']), reverse=True):
+                                    corr = d['Correlation']
+                                    color = '#10b981' if corr > 0 else '#ef4444'
+                                    pct = abs(corr) * 100
+                                    st.markdown(f'<div style="margin-bottom: 0.75rem;"><div style="display: flex; justify-content: space-between; font-size: 0.85rem;"><span style="color: #EAEAEA;">{d["Name"]}</span><span style="color: {color}; font-weight: 600;">{corr:+.3f}</span></div><div class="conviction-meter"><div class="conviction-fill" style="width: {pct}%; background: {color};"></div></div></div>', unsafe_allow_html=True)
+                            else:
+                                st.info("No macro correlations available")
                         
                 except Exception as e:
                     st.error(f"Analysis Error: {str(e)}")
@@ -1882,8 +1880,8 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
             
-            # Tabs for different views - ADD 5th tab for Regime
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(["**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**🎯 Regime Analysis**", "**📋 Full Data**"])
+#            # Tabs for ETF Screener - Regime Analysis first
+            tab4, tab1, tab2, tab3, tab5 = st.tabs(["**🎯 Regime Analysis**", "**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**📋 Full Data**"])
             
             with tab1:
                 col_buy, col_sell = st.columns(2)
@@ -2277,8 +2275,8 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
             
-            # Tabs for different views - ADD 5th tab for Regime
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(["**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**🎯 Regime Analysis**", "**📋 Full Data**"])
+#            # Tabs for Market Screener Single Day - Regime Analysis first
+            tab4, tab1, tab2, tab3, tab5 = st.tabs(["**🎯 Regime Analysis**", "**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**📋 Full Data**"])
             
             with tab1:
                 col_buy, col_sell = st.columns(2)
@@ -2766,7 +2764,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
         # Tabs for different views
-        tab1, tab2, tab3, tab4 = st.tabs(["**📈 Zone Trends**", "**📊 Signal Trends**", "**🎯 Regime Analysis**", "**📋 Data Table**"])
+        tab3, tab1, tab2, tab4 = st.tabs(["**🎯 Regime Analysis**", "**📈 Zone Trends**", "**📊 Signal Trends**", "**📋 Data Table**"])
         
         with tab1:
             st.markdown("##### Overbought / Oversold Distribution Over Time")
@@ -3285,7 +3283,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
         # Tabs for different views
-        tab1, tab2, tab3, tab4 = st.tabs(["**📈 Zone Trends**", "**📊 Signal Trends**", "**🎯 Regime Analysis**", "**📋 Data Table**"])
+        tab3, tab1, tab2, tab4 = st.tabs(["**🎯 Regime Analysis**", "**📈 Zone Trends**", "**📊 Signal Trends**", "**📋 Data Table**"])
         
         with tab1:
             st.markdown("##### Overbought / Oversold Distribution Over Time")
