@@ -32,7 +32,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 st.set_page_config(
     page_title="NIRNAY | Unified Market Analysis",
     layout="wide",
-    page_icon="📊",
     initial_sidebar_state="expanded"
 )
 
@@ -1690,7 +1689,7 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                         fig_hmm.add_trace(go.Scatter(x=display_df.index, y=display_df['HMM_Bear'], mode='lines', name='P(Bear)', line=dict(color='#ef4444', width=2), fill='tozeroy', fillcolor='rgba(239,68,68,0.2)'))
                         fig_hmm.add_hline(y=0.5, line_dash='dash', line_color='#888888')
                         fig_hmm.update_layout(template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=250, margin=dict(l=10, r=10, t=10, b=10), yaxis=dict(range=[0, 1], showgrid=True, gridcolor='#2A2A2A'), xaxis=dict(showgrid=True, gridcolor='#2A2A2A'), legend=dict(orientation='h', y=1.1), hovermode='x unified')
-                        st.plotly_chart(fig_hmm, use_container_width=True, config={'displayModeBar': False})
+                        st.plotly_chart(fig_hmm, width="stretch", config={'displayModeBar': False})
                         
                         c1, c2 = st.columns(2)
                         with c1:
@@ -1707,7 +1706,7 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                                 textinfo='label+percent', textfont=dict(size=10, color='white')
                             ))
                             fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=250, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
-                            st.plotly_chart(fig_regime, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
                         
                         with c2:
                             st.markdown("##### Volatility Regime Distribution")
@@ -1719,13 +1718,13 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                                 textinfo='label+percent', textfont=dict(size=10, color='white')
                             ))
                             fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=250, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
-                            st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
                         
                         # Change points
                         change_points = display_df[display_df['Change_Point'] == True]
                         if len(change_points) > 0:
                             st.markdown(f"##### Change Points Detected: {len(change_points)}")
-                            st.dataframe(change_points[['Close', 'Unified_Osc', 'Regime', 'Vol_Regime']].tail(10), use_container_width=True)
+                            st.dataframe(change_points[['Close', 'Unified_Osc', 'Regime', 'Vol_Regime']].tail(10), width="stretch")
                         else:
                             st.info("No change points detected in this period")
                     
@@ -2022,7 +2021,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='HMM Regime', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_regime, use_container_width=True, config={'displayModeBar': False})
+                    st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
                 
                 with c2:
                     vol_counts = results_df['Vol_Regime'].value_counts()
@@ -2033,7 +2032,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='Volatility Regime (GARCH)', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
+                    st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
                 
                 st.markdown("##### Regime Breakdown by ETF")
                 
@@ -2417,7 +2416,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='HMM Regime', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_regime, use_container_width=True, config={'displayModeBar': False})
+                    st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
                 
                 with c2:
                     vol_counts = results_df['Vol_Regime'].value_counts()
@@ -2428,7 +2427,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='Volatility Regime (GARCH)', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_vol, use_container_width=True, config={'displayModeBar': False})
+                    st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
                 
                 st.markdown("##### Regime Breakdown by Stock")
                 
