@@ -1,136 +1,78 @@
-# ◈ NIRNAY (निर्णय) - Unified Market Analysis
+# ARTHAGATI (अर्थगति) - Market Sentiment Analysis
 
-**Quantitative Signal + Regime Intelligence System**  
-**A Pragyam Product Family Member**
+**A Hemrek Capital Product | v1.2.0**
 
-Version: 1.0.0 - Unified Intelligence
+Quantitative market mood analysis with MSF-enhanced indicators and TradingView-style charting.
 
----
+## Features
 
-## Overview
+### 📈 Historical Mood Terminal (TradingView Style)
+- **Main Chart**: Mood Score (Yellow line) with zero reference
+- **Indicator Pane**: MSF Spread oscillator (Cyan line) with auto-scaling
+- **Divergence Signals**: 
+  - 🔻 Red triangles (y=5) = Mood lower low + MSF higher low
+  - 🔺 Green triangles (y=-5) = Mood higher high + MSF lower high
+- **Timeframe Selector**: 1W, 1M, 3M, 6M, YTD, 1Y, 2Y, 5Y, MAX
+- **Period Summary**: High, Low, Average metrics for selected timeframe
 
-NIRNAY combines signal generation from UMA with regime intelligence from AVASTHA into a unified market analysis system. It provides the same features and UI/UX as UMA, but with enhanced regime-aware analysis underneath.
+### 📊 MSF-Enhanced Spread Indicator
+Four-component oscillator inspired by Nirnay's MSF logic:
 
-## Key Features
+| Component | Weight | Source | Description |
+|-----------|--------|--------|-------------|
+| Momentum | 30% | NIFTY | ROC z-score normalized |
+| Structure | 25% | Mood | Trend acceleration |
+| Regime | 25% | NIFTY | Price persistence |
+| Flow | 20% | AD_RATIO | Breadth participation |
 
-### 🏦 ETF Screener
-- Full MSF + MMR + Regime analysis across 30 curated ETFs
-- Single Day and Time Series modes
-- Macro correlation analysis
-- HMM regime detection
+### Divergence Detection
+- **Red Signal (y=5)**: Mood Score making lower lows while MSF making higher lows
+- **Green Signal (y=-5)**: Mood Score making higher highs while MSF making lower highs
 
-### 📊 Market Screener  
-- MSF-based signal analysis
-- F&O stocks and Index constituents universe
-- Time Series tracking
-- Volatility regime (GARCH)
+**Signal Interpretation:**
+- Red triangles at top suggest caution
+- Green triangles at bottom suggest opportunity
+- Auto-scaling Y-axis for both charts
 
-### 📈 Chart Analysis
-- Deep dive into individual securities
-- Price & oscillator charts
-- HMM state probabilities
-- CUSUM change point detection
-- Macro driver correlations
+### 🔍 Similar Periods Analysis
+- AI-matched historical periods based on mood score and volatility
+- Similarity scoring with recency weighting
+- Card-based display with mood classification
 
----
-
-## Analysis Methodology
-
-### Signal Generation (from UMA)
-
-**MSF - Market Structure & Flow**
-- Momentum Analysis (ROC dynamics)
-- Microstructure (Price efficiency)
-- Flow Detection (Volume-weighted)
-
-**MMR - Macro Market Regression**
-- Bond Markets (US/IN 10Y yields)
-- Currencies (DXY, USD/INR)
-- Commodities (Gold, Crude)
-
-### Regime Intelligence (from AVASTHA)
-
-**HMM - Hidden Markov Model**
-- 3-state regime discovery (BULL/NEUTRAL/BEAR)
-- Online learning with adaptive parameters
-- State probability tracking
-
-**GARCH - Volatility Regime**
-- GARCH(1,1) volatility estimation
-- Regime classification (LOW/NORMAL/HIGH/EXTREME)
-- Dynamic signal scaling
-
-**CUSUM - Change Point Detection**
-- Cumulative sum monitoring
-- Structural break detection
-- Regime transition alerts
-
-**Kalman Filter**
-- Adaptive signal smoothing
-- Noise estimation
-- Real-time filtering
-
----
-
-## Signal Interpretation
-
-| Zone | Signal Range | Interpretation |
-|------|-------------|----------------|
-| 🟢 Oversold | < -5 | Potential buying opportunity |
-| ⚪ Neutral | -5 to +5 | No clear directional bias |
-| 🔴 Overbought | > +5 | Potential selling opportunity |
-
-### Regime States
-
-| Regime | Description |
-|--------|-------------|
-| BULL | Strong bullish state (P > 0.6) |
-| WEAK_BULL | Moderate bullish bias |
-| NEUTRAL | No clear direction |
-| WEAK_BEAR | Moderate bearish bias |
-| BEAR | Strong bearish state (P > 0.6) |
-| TRANSITION | Change point detected |
-
----
+### 📋 Correlation Analysis
+- PE Ratio correlations with dependent variables
+- Earnings Yield correlations
+- Visual bar charts with strength indicators
 
 ## Installation
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run arthagati.py
 ```
 
 ## Requirements
+- Python 3.10+
+- streamlit
+- pandas
+- numpy
+- plotly
+- pandas_ta
+- pytz
 
-- streamlit>=1.28.0
-- pandas>=2.0.0
-- numpy>=1.24.0
-- yfinance>=0.2.31
-- plotly>=5.18.0
-- requests>=2.31.0
+## Data Source
+Google Sheets with market breadth and valuation data.
 
-## File Structure
+Required columns:
+- DATE, NIFTY, AD_RATIO, NIFTY50_PE, NIFTY50_EY
+- Plus: Breadth metrics, bond yields, valuation ratios
 
-```
-nirnay/
-├── app.py           # Complete application (single file)
-├── requirements.txt # Dependencies
-└── README.md        # Documentation
-```
+## Hemrek Capital Design System
+- Golden accent theme (#FFC300)
+- Dark mode interface (Nirnay-grade)
+- Consistent with NIRNAY, AARAMBH, PRAGYAM, SWING, SAMHITA
 
----
-
-## Parameters
-
-| Parameter | Default | Range | Description |
-|-----------|---------|-------|-------------|
-| Lookback Period | 20 | 10-50 | MSF calculation window |
-| ROC Length | 14 | 5-30 | Rate of change period |
-| Regime Sensitivity | 1.5 | 0.5-3.0 | Adaptive weighting power |
-| Base MSF Weight | 0.5 | 0.0-1.0 | MSF vs MMR base allocation |
-
----
-
-## License
-
-Proprietary - Pragyam Product Family
+## Version History
+- v1.2.0: Complete redesign with TradingView-style charts, divergence signals, timeframe selector, Nirnay UI/UX
+- v1.1.0: Initial MSF integration
+- v1.0.0: Initial release
