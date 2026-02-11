@@ -284,8 +284,11 @@ INDEX_LIST = [
     "NIFTY 50", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 200", "NIFTY 500",
     "NIFTY MIDCAP 50", "NIFTY MIDCAP 100", "NIFTY SMLCAP 100", "NIFTY BANK",
     "NIFTY AUTO", "NIFTY FIN SERVICE", "NIFTY FMCG", "NIFTY IT",
-    "NIFTY MEDIA", "NIFTY METAL", "NIFTY PHARMA"
+    "NIFTY MEDIA", "NIFTY METAL", "NIFTY PHARMA",
+    "S&P 500", "DOW JONES", "NASDAQ 100"
 ]
+
+US_INDEX_LIST = ["S&P 500", "DOW JONES", "NASDAQ 100"]
 
 BASE_URL = "https://www.niftyindices.com/IndexConstituent/"
 INDEX_URL_MAP = {
@@ -353,7 +356,11 @@ def get_fno_stock_list():
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_index_stock_list(index):
-    """Fetch index constituents from NSE Indices"""
+    """Fetch index constituents from NSE Indices or US Indices"""
+    # Route US indices to separate handler
+    if index in US_INDEX_LIST:
+        return get_us_index_stock_list(index)
+    
     url = INDEX_URL_MAP.get(index)
     if not url:
         return None, f"No URL for {index}"
@@ -377,6 +384,79 @@ def get_index_stock_list(index):
             
     except Exception as e:
         return None, f"Error: {e}"
+
+
+# Hardcoded Dow Jones 30 components (updated periodically — small stable list)
+DOW_JONES_TICKERS = [
+    "AMZN", "AMGN", "AAPL", "BA", "CAT", "CSCO", "CVX", "GS", "HD", "HON",
+    "IBM", "JNJ", "JPM", "KO", "MCD", "MMM", "MRK", "MSFT", "NKE", "PG",
+    "CRM", "SHW", "TRV", "UNH", "V", "VZ", "WMT", "DIS", "DOW", "NVDA"
+]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_us_index_stock_list(index):
+    """Fetch US index constituents from Wikipedia with hardcoded fallback for Dow Jones"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        if index == "S&P 500":
+            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            tables = pd.read_html(io.StringIO(response.text))
+            if tables:
+                df = tables[0]
+                if 'Symbol' in df.columns:
+                    symbols = df['Symbol'].str.strip().str.replace('.', '-', regex=False).tolist()
+                    symbols = [s for s in symbols if s and str(s).strip()]
+                    return symbols, f"✓ Fetched {len(symbols)} S&P 500 constituents"
+            return None, "Could not parse S&P 500 table"
+            
+        elif index == "DOW JONES":
+            # Dow Jones is only 30 stocks — use hardcoded list with Wikipedia refresh attempt
+            try:
+                url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
+                response = requests.get(url, headers=headers, timeout=15)
+                response.raise_for_status()
+                tables = pd.read_html(io.StringIO(response.text))
+                # Find the table with ticker symbols (usually has 'Symbol' or 'Ticker' column)
+                for tbl in tables:
+                    for col in ['Symbol', 'Ticker', 'Ticker symbol']:
+                        if col in tbl.columns:
+                            symbols = tbl[col].str.strip().tolist()
+                            symbols = [s for s in symbols if s and str(s).strip() and len(s) <= 5]
+                            if 20 <= len(symbols) <= 35:
+                                return symbols, f"✓ Fetched {len(symbols)} Dow Jones constituents"
+            except Exception:
+                pass
+            # Fallback to hardcoded list
+            return DOW_JONES_TICKERS.copy(), f"✓ Loaded {len(DOW_JONES_TICKERS)} Dow Jones constituents"
+            
+        elif index == "NASDAQ 100":
+            url = "https://en.wikipedia.org/wiki/Nasdaq-100"
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            tables = pd.read_html(io.StringIO(response.text))
+            for tbl in tables:
+                if 'Ticker' in tbl.columns:
+                    symbols = tbl['Ticker'].str.strip().str.replace('.', '-', regex=False).tolist()
+                    symbols = [s for s in symbols if s and str(s).strip()]
+                    if len(symbols) >= 90:
+                        return symbols, f"✓ Fetched {len(symbols)} NASDAQ 100 constituents"
+                elif 'Symbol' in tbl.columns:
+                    symbols = tbl['Symbol'].str.strip().str.replace('.', '-', regex=False).tolist()
+                    symbols = [s for s in symbols if s and str(s).strip()]
+                    if len(symbols) >= 90:
+                        return symbols, f"✓ Fetched {len(symbols)} NASDAQ 100 constituents"
+            return None, "Could not parse NASDAQ 100 table"
+        
+        return None, f"Unknown US index: {index}"
+        
+    except Exception as e:
+        return None, f"Error fetching {index}: {e}"
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1421,7 +1501,7 @@ def run_home_page():
             <p style='color: var(--text-secondary); font-size: 0.85rem;'>
                 <strong>Features:</strong><br>
                 • F&O Stocks Universe<br>
-                • 16 Index Constituents<br>
+                • 19 Index Constituents (incl. S&amp;P 500, Dow Jones, NASDAQ 100)<br>
                 • Time Series Analysis<br>
                 • Volatility Regime (GARCH)
             </p>
