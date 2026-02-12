@@ -1052,22 +1052,29 @@ class NirnayEngine:
     ) -> SignalType:
         """
         Regime-aware and Hurst-aware signal classification.
-        Mean-reversion signals are downweighted when H > 0.5 (trending market).
+        Shifts percentile rank based on regime: BULL shifts toward buy, BEAR toward sell.
         """
         pct = thresholds.signal_percentile
 
-        # Regime adjustment
-        if regime in [MarketRegime.BULL, MarketRegime.STRONG_BULL]:
-            buy_boost = 0.08
-            sell_penalty = 0.08
-        elif regime in [MarketRegime.BEAR, MarketRegime.CRISIS]:
-            buy_boost = -0.08
-            sell_penalty = -0.08
+        # Regime shift: positive = shift toward buy (lower percentile = more likely buy)
+        # BULL regime: easier to trigger buy, harder to trigger sell
+        # BEAR regime: harder to trigger buy, easier to trigger sell
+        if regime in [MarketRegime.STRONG_BULL]:
+            regime_shift = 0.10
+        elif regime in [MarketRegime.BULL]:
+            regime_shift = 0.06
+        elif regime in [MarketRegime.CRISIS]:
+            regime_shift = -0.10
+        elif regime in [MarketRegime.BEAR]:
+            regime_shift = -0.06
+        elif regime in [MarketRegime.WEAK_BULL]:
+            regime_shift = 0.03
+        elif regime in [MarketRegime.WEAK_BEAR]:
+            regime_shift = -0.03
         else:
-            buy_boost = 0
-            sell_penalty = 0
+            regime_shift = 0.0
 
-        adjusted_pct = pct + buy_boost - sell_penalty
+        adjusted_pct = np.clip(pct - regime_shift, 0.0, 1.0)
 
         if adjusted_pct <= 0.10:
             return SignalType.STRONG_BUY

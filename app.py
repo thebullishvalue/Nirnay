@@ -44,7 +44,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-VERSION = "v1.1.0"
+VERSION = "v2.0.0"
 PRODUCT_NAME = "Nirnay"
 COMPANY = "Hemrek Capital"
 
@@ -323,6 +323,12 @@ ANALYSIS_UNIVERSE_OPTIONS = ["F&O Stocks", "Index Constituents"]
 def get_display_name(symbol):
     return SYMBOL_NAMES.get(symbol, symbol.replace(".NS", ""))
 
+def get_currency_symbol(symbol):
+    """Return appropriate currency symbol based on ticker suffix"""
+    if isinstance(symbol, str) and symbol.endswith('.NS'):
+        return '₹'
+    return '$'  # Default to USD for international/US tickers
+
 # ══════════════════════════════════════════════════════════════════════════════
 # UNIVERSE SELECTION FUNCTIONS (for Spread Screener)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -330,8 +336,40 @@ def get_display_name(symbol):
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_fno_stock_list():
     """Fetch F&O stock list from NSE"""
+    # Try nsetools library first
     try:
-        stock_data = nse_get_advances_declines()
+        from nsetools import Nse
+        nse = Nse()
+        stock_data = nse.get_advances_declines()
+        if isinstance(stock_data, list):
+            stock_data = pd.DataFrame(stock_data)
+        if not isinstance(stock_data, pd.DataFrame):
+            raise ValueError(f"Unexpected type: {type(stock_data)}")
+    except ImportError:
+        # Fallback: fetch F&O lot sizes CSV from NSE (contains all F&O symbols)
+        try:
+            url = "https://archives.nseindia.com/content/fo/fo_mktlots.csv"
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            response = requests.get(url, headers=headers, verify=False, timeout=15)
+            if response.status_code == 200 and len(response.text) > 100:
+                stock_data = pd.read_csv(io.StringIO(response.text))
+                # Column is typically "SYMBOL" or second column
+                if 'SYMBOL' in stock_data.columns:
+                    symbols = stock_data['SYMBOL'].str.strip().dropna().unique().tolist()
+                else:
+                    # Try second column (common format)
+                    symbols = stock_data.iloc[:, 1].str.strip().dropna().unique().tolist()
+                symbols = [s for s in symbols if s and str(s).strip() and s.upper() != 'SYMBOL']
+                symbols_ns = [str(s) + ".NS" for s in symbols if s and str(s).strip()]
+                if symbols_ns:
+                    return symbols_ns, f"✓ Fetched {len(symbols_ns)} F&O securities (from NSE archives)"
+            return None, "Could not fetch F&O list from NSE archives"
+        except Exception as e2:
+            return None, f"nsetools not installed and NSE archive fallback failed: {e2}"
+    except Exception as e:
+        return None, f"Error: {e}"
+    
+    try:
         if not isinstance(stock_data, pd.DataFrame):
             return None, f"API returned unexpected type: {type(stock_data)}"
         
@@ -710,8 +748,13 @@ def calculate_mmr(df, length=20, num_vars=5):
 
 
 def run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight):
-    """Wrapper: delegates to nirnay_core.run_full_analysis"""
-    return _core_run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight, MACRO_SYMBOLS)
+    """Wrapper: delegates to nirnay_core.run_full_analysis, enriches driver names"""
+    result_df, drivers = _core_run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight, MACRO_SYMBOLS)
+    # Core returns {"Symbol": ticker, "Correlation": val} — enrich with human-readable "Name"
+    reverse_macro = {v: k for k, v in MACRO_SYMBOLS.items()}
+    for d in drivers:
+        d["Name"] = reverse_macro.get(d["Symbol"], d["Symbol"])
+    return result_df, drivers
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1328,7 +1371,8 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                         st.markdown(f'<div class="metric-card info"><h4>MMR (Macro)</h4><h2>{curr_mmr:.2f}</h2><div class="sub-metric">Macro Regression</div></div>', unsafe_allow_html=True)
                     with col4:
                         price_color = "success" if price_change >= 0 else "danger"
-                        st.markdown(f'<div class="metric-card {price_color}"><h4>Price</h4><h2>₹{curr_price:,.2f}</h2><div class="sub-metric">{"▲" if price_change >= 0 else "▼"} {abs(price_change):.2f}%</div></div>', unsafe_allow_html=True)
+                        curr_sym = get_currency_symbol(target_symbol)
+                        st.markdown(f'<div class="metric-card {price_color}"><h4>Price</h4><h2>{curr_sym}{curr_price:,.2f}</h2><div class="sub-metric">{"▲" if price_change >= 0 else "▼"} {abs(price_change):.2f}%</div></div>', unsafe_allow_html=True)
                     
                     # Row 2: Regime Intelligence metrics (NEW)
                     st.markdown("<br>", unsafe_allow_html=True)
@@ -1548,7 +1592,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             n_bull = len(results_df[results_df['Regime'].str.contains('BULL', na=False)])
             n_bear = len(results_df[results_df['Regime'].str.contains('BEAR', na=False)])
             n_transition = len(results_df[results_df['Regime'] == 'TRANSITION'])
-            dominant_regime = results_df['Regime'].mode().iloc[0] if len(results_df) > 0 else "NEUTRAL"
+            dominant_regime = (results_df['Regime'].mode().iloc[0] if not results_df['Regime'].mode().empty else 'NEUTRAL') if len(results_df) > 0 else 'NEUTRAL'
             regime_color = "success" if "BULL" in dominant_regime else "danger" if "BEAR" in dominant_regime else "warning" if dominant_regime == "TRANSITION" else "neutral"
             
             # Metrics row
@@ -1947,7 +1991,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             n_bull = len(results_df[results_df['Regime'].str.contains('BULL', na=False)])
             n_bear = len(results_df[results_df['Regime'].str.contains('BEAR', na=False)])
             n_transition = len(results_df[results_df['Regime'] == 'TRANSITION'])
-            dominant_regime = results_df['Regime'].mode().iloc[0] if len(results_df) > 0 else "NEUTRAL"
+            dominant_regime = (results_df['Regime'].mode().iloc[0] if not results_df['Regime'].mode().empty else 'NEUTRAL') if len(results_df) > 0 else 'NEUTRAL'
             regime_color = "success" if "BULL" in dominant_regime else "danger" if "BEAR" in dominant_regime else "warning" if dominant_regime == "TRANSITION" else "neutral"
             
             # Metrics row
@@ -1981,14 +2025,14 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     if not confirmed_buys.empty:
                         st.markdown('<span class="status-badge buy">CONFIRMED BUY SIGNALS</span>', unsafe_allow_html=True)
                         for _, row in confirmed_buys.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                     
                     oversold = results_df[(results_df['Zone'] == 'Oversold') & (results_df['Trigger'] != 'BUY')].sort_values('Signal').head(15)
                     if not oversold.empty:
                         st.markdown('<span class="status-badge oversold">OVERSOLD ZONE</span>', unsafe_allow_html=True)
                         for _, row in oversold.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                     
                     if confirmed_buys.empty and oversold.empty:
                         st.markdown('<p style="color: #888888; padding: 1rem;">No buy opportunities detected</p>', unsafe_allow_html=True)
@@ -2001,14 +2045,14 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     if not confirmed_sells.empty:
                         st.markdown('<span class="status-badge sell">CONFIRMED SELL SIGNALS</span>', unsafe_allow_html=True)
                         for _, row in confirmed_sells.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                     
                     overbought = results_df[(results_df['Zone'] == 'Overbought') & (results_df['Trigger'] != 'SELL')].sort_values('Signal', ascending=False).head(15)
                     if not overbought.empty:
                         st.markdown('<span class="status-badge overbought">OVERBOUGHT ZONE</span>', unsafe_allow_html=True)
                         for _, row in overbought.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                     
                     if confirmed_sells.empty and overbought.empty:
                         st.markdown('<p style="color: #888888; padding: 1rem;">No sell opportunities detected</p>', unsafe_allow_html=True)
@@ -2156,7 +2200,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                 with filter_col2:
                     signal_filter = st.multiselect("Filter by Trigger", ["BUY", "SELL", "-"], default=["BUY", "SELL", "-"])
                 with filter_col3:
-                    sort_by = st.selectbox("Sort by", ["Signal", "Change", "Price", "DisplayName"], index=0)
+                    sort_by = st.selectbox("Sort by", ["Signal", "Change", "Price", "DisplayName", "Regime", "Confidence"], index=0)
                 
                 # Apply filters
                 filtered_df = results_df[
@@ -2164,9 +2208,9 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     (results_df['Trigger'].isin(signal_filter))
                 ].sort_values(sort_by, ascending=(sort_by == 'DisplayName'))
                 
-                display_cols = ['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'Zone', 'Trigger', 'Divergence']
+                display_cols = ['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'Zone', 'Trigger', 'Regime', 'Vol_Regime', 'Confidence']
                 display_df = filtered_df[display_cols].copy()
-                display_df.columns = ['Symbol', 'Price', 'Chg %', 'Signal', 'MSF', 'Zone', 'Trigger', 'Divergence']
+                display_df.columns = ['Symbol', 'Price', 'Chg %', 'Signal', 'MSF', 'Zone', 'Trigger', 'HMM Regime', 'Vol Regime', 'Conf']
                 
                 st.dataframe(display_df, width="stretch", hide_index=True, height=500)
                 
@@ -2394,7 +2438,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
                         day_stats["Change_Points"] += 1
                         
                 except Exception as e:
-                    errors.append(f"{item}: {str(e)[:80]}")
+                    errors.append(f"{ticker}: {str(e)[:80]}")
             
             if day_stats["Total_Analyzed"] > 0:
                 day_stats["Avg_Signal"] = day_stats["Signal_Sum"] / day_stats["Total_Analyzed"]
@@ -2914,7 +2958,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                         day_stats["Change_Points"] += 1
                         
                 except Exception as e:
-                    errors.append(f"{item}: {str(e)[:80]}")
+                    errors.append(f"{symbol}: {str(e)[:80]}")
             
             if day_stats["Total_Analyzed"] > 0:
                 day_stats["Avg_Signal"] = day_stats["Signal_Sum"] / day_stats["Total_Analyzed"]
