@@ -3006,7 +3006,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
                 template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
                 margin=dict(l=10, r=10, t=30, b=50),
                 xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-8, 8]),
+                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-6, 6]),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
                 font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
             )
