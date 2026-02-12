@@ -22,14 +22,6 @@ import requests
 import io
 import urllib3
 
-# Import production core engine (single source of truth)
-from nirnay_core import (
-    MathUtils, MSFCalculator, MMRCalculator, DivergenceDetector,
-    AdaptiveKalmanFilter, AdaptiveHMM, GARCHDetector, CUSUMDetector,
-    NirnayEngine, MarketRegime, SignalType, VolatilityRegime,
-    run_full_analysis as _core_run_full_analysis
-)
-
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -44,7 +36,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-VERSION = "v2.0.0"
+VERSION = "v1.1.0"
 PRODUCT_NAME = "Nirnay"
 COMPANY = "Hemrek Capital"
 
@@ -323,12 +315,6 @@ ANALYSIS_UNIVERSE_OPTIONS = ["F&O Stocks", "Index Constituents"]
 def get_display_name(symbol):
     return SYMBOL_NAMES.get(symbol, symbol.replace(".NS", ""))
 
-def get_currency_symbol(symbol):
-    """Return appropriate currency symbol based on ticker suffix"""
-    if isinstance(symbol, str) and symbol.endswith('.NS'):
-        return '₹'
-    return '$'  # Default to USD for international/US tickers
-
 # ══════════════════════════════════════════════════════════════════════════════
 # UNIVERSE SELECTION FUNCTIONS (for Spread Screener)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -336,40 +322,8 @@ def get_currency_symbol(symbol):
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_fno_stock_list():
     """Fetch F&O stock list from NSE"""
-    # Try nsetools library first
     try:
-        from nsetools import Nse
-        nse = Nse()
-        stock_data = nse.get_advances_declines()
-        if isinstance(stock_data, list):
-            stock_data = pd.DataFrame(stock_data)
-        if not isinstance(stock_data, pd.DataFrame):
-            raise ValueError(f"Unexpected type: {type(stock_data)}")
-    except ImportError:
-        # Fallback: fetch F&O lot sizes CSV from NSE (contains all F&O symbols)
-        try:
-            url = "https://archives.nseindia.com/content/fo/fo_mktlots.csv"
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-            response = requests.get(url, headers=headers, verify=False, timeout=15)
-            if response.status_code == 200 and len(response.text) > 100:
-                stock_data = pd.read_csv(io.StringIO(response.text))
-                # Column is typically "SYMBOL" or second column
-                if 'SYMBOL' in stock_data.columns:
-                    symbols = stock_data['SYMBOL'].str.strip().dropna().unique().tolist()
-                else:
-                    # Try second column (common format)
-                    symbols = stock_data.iloc[:, 1].str.strip().dropna().unique().tolist()
-                symbols = [s for s in symbols if s and str(s).strip() and s.upper() != 'SYMBOL']
-                symbols_ns = [str(s) + ".NS" for s in symbols if s and str(s).strip()]
-                if symbols_ns:
-                    return symbols_ns, f"✓ Fetched {len(symbols_ns)} F&O securities (from NSE archives)"
-            return None, "Could not fetch F&O list from NSE archives"
-        except Exception as e2:
-            return None, f"nsetools not installed and NSE archive fallback failed: {e2}"
-    except Exception as e:
-        return None, f"Error: {e}"
-    
-    try:
+        stock_data = nse_get_advances_declines()
         if not isinstance(stock_data, pd.DataFrame):
             return None, f"API returned unexpected type: {type(stock_data)}"
         
@@ -599,13 +553,212 @@ def fetch_batch_data(stock_list, end_date=None, days_back=100, include_live=True
     except Exception as e:
         return None, f"Download error: {e}"
 
+# ══════════════════════════════════════════════════════════════════════════════
+# UTILITY FUNCTIONS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def sigmoid(x, scale=1.0):
+    return 2.0 / (1.0 + np.exp(-x / scale)) - 1.0
+
+def zscore_clipped(series, window, clip=3.0):
+    roll_mean = series.rolling(window=window).mean()
+    roll_std = series.rolling(window=window).std()
+    z = (series - roll_mean) / roll_std.replace(0, np.nan)
+    return z.clip(-clip, clip).fillna(0)
+
+def calculate_atr(df, length=14):
+    high_low = df['High'] - df['Low']
+    high_close = (df['High'] - df['Close'].shift()).abs()
+    low_close = (df['Low'] - df['Close'].shift()).abs()
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    return tr.ewm(alpha=1/length, adjust=False).mean()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DATA FETCHING (Macro + Individual Tickers)
+# REGIME INTELLIGENCE (from AVASTHA)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class AdaptiveHMM:
+    """Hidden Markov Model for regime state discovery"""
+    
+    def __init__(self):
+        self.n_states = 3
+        self.transition_matrix = np.array([
+            [0.85, 0.10, 0.05],
+            [0.10, 0.80, 0.10],
+            [0.05, 0.10, 0.85]
+        ])
+        self.emission_means = np.array([0.6, 0.0, -0.6])
+        self.emission_stds = np.array([0.3, 0.25, 0.3])
+        self.state_probabilities = np.array([0.33, 0.34, 0.33])
+        self.observation_history = []
+        self.state_history = []
+    
+    def _gaussian_pdf(self, x, mean, std):
+        if std < 1e-8:
+            return 1.0 if abs(x - mean) < 1e-8 else 0.0
+        return np.exp(-0.5 * ((x - mean) / std) ** 2) / (std * np.sqrt(2 * np.pi))
+    
+    def update(self, observation):
+        self.observation_history.append(observation)
+        
+        # Forward step
+        predicted = self.transition_matrix.T @ self.state_probabilities
+        emissions = np.array([self._gaussian_pdf(observation, self.emission_means[s], self.emission_stds[s]) for s in range(3)])
+        updated = emissions * predicted
+        total = updated.sum()
+        if total > 1e-10:
+            updated /= total
+        else:
+            updated = np.array([0.33, 0.34, 0.33])
+        
+        self.state_probabilities = updated
+        most_likely = np.argmax(updated)
+        self.state_history.append(most_likely)
+        
+        # Adapt parameters online
+        if len(self.observation_history) >= 10:
+            recent_obs = np.array(self.observation_history[-50:])
+            recent_states = self.state_history[-len(recent_obs):]
+            for state in range(3):
+                mask = np.array(recent_states) == state
+                if mask.sum() >= 2:
+                    state_obs = recent_obs[mask]
+                    self.emission_means[state] = 0.9 * self.emission_means[state] + 0.1 * np.mean(state_obs)
+                    self.emission_stds[state] = 0.9 * self.emission_stds[state] + 0.1 * max(np.std(state_obs), 0.1)
+        
+        return {"BULL": updated[0], "NEUTRAL": updated[1], "BEAR": updated[2]}
+    
+    def reset(self):
+        self.state_probabilities = np.array([0.33, 0.34, 0.33])
+        self.observation_history = []
+        self.state_history = []
+
+
+class GARCHDetector:
+    """GARCH-inspired volatility regime detection"""
+    
+    def __init__(self):
+        self.current_variance = 0.04
+        self.omega = 0.0001
+        self.alpha = 0.1
+        self.beta = 0.85
+        self.long_term_mean = 0.04
+        self.shock_history = []
+    
+    def update(self, shock):
+        self.shock_history.append(shock)
+        shock_sq = shock ** 2
+        new_var = self.omega + self.alpha * shock_sq + self.beta * self.current_variance
+        self.current_variance = np.clip(new_var, 0.001, 1.0)
+        
+        if len(self.shock_history) >= 10:
+            realized = np.var(self.shock_history[-min(50, len(self.shock_history)):])
+            self.long_term_mean = 0.95 * self.long_term_mean + 0.05 * realized
+        
+        return np.sqrt(self.current_variance)
+    
+    def get_regime(self):
+        current_vol = np.sqrt(self.current_variance)
+        long_term_vol = np.sqrt(self.long_term_mean)
+        ratio = current_vol / long_term_vol if long_term_vol > 0 else 1.0
+        
+        if ratio < 0.6:
+            return "LOW", 1.3
+        elif ratio < 0.9:
+            return "NORMAL", 1.0
+        elif ratio < 1.4:
+            return "HIGH", 0.8
+        else:
+            return "EXTREME", 0.6
+    
+    def reset(self):
+        self.current_variance = 0.04
+        self.shock_history = []
+
+
+class CUSUMDetector:
+    """CUSUM change point detection"""
+    
+    def __init__(self, threshold=4.0, drift=0.5):
+        self.threshold = threshold
+        self.drift = drift
+        self.positive_cusum = 0.0
+        self.negative_cusum = 0.0
+        self.value_history = []
+        self.running_mean = 0.0
+        self.running_std = 1.0
+    
+    def update(self, value):
+        self.value_history.append(value)
+        
+        if len(self.value_history) >= 3:
+            recent = self.value_history[-min(20, len(self.value_history)):]
+            self.running_mean = np.mean(recent)
+            self.running_std = max(np.std(recent), 0.1)
+        
+        z = (value - self.running_mean) / self.running_std
+        
+        self.positive_cusum = max(0, self.positive_cusum + z - self.drift)
+        self.negative_cusum = max(0, self.negative_cusum - z - self.drift)
+        
+        change_detected = self.positive_cusum > self.threshold or self.negative_cusum > self.threshold
+        
+        if change_detected:
+            self.positive_cusum = 0
+            self.negative_cusum = 0
+        
+        return change_detected
+    
+    def reset(self):
+        self.positive_cusum = 0.0
+        self.negative_cusum = 0.0
+        self.value_history = []
+
+
+class AdaptiveKalmanFilter:
+    """Kalman filter for signal smoothing"""
+    
+    def __init__(self, process_var=0.01, measurement_var=0.1):
+        self.estimate = 0.0
+        self.error_covariance = 1.0
+        self.process_variance = process_var
+        self.measurement_variance = measurement_var
+        self.innovation_history = []
+    
+    def update(self, measurement):
+        predicted_estimate = self.estimate
+        predicted_covariance = self.error_covariance + self.process_variance
+        
+        innovation = measurement - predicted_estimate
+        self.innovation_history.append(innovation)
+        if len(self.innovation_history) > 50:
+            self.innovation_history.pop(0)
+        
+        innovation_cov = predicted_covariance + self.measurement_variance
+        kalman_gain = predicted_covariance / innovation_cov
+        
+        self.estimate = predicted_estimate + kalman_gain * innovation
+        self.error_covariance = (1 - kalman_gain) * predicted_covariance
+        
+        if len(self.innovation_history) >= 5:
+            innovation_var = np.var(self.innovation_history[-min(20, len(self.innovation_history)):])
+            self.measurement_variance = 0.9 * self.measurement_variance + 0.1 * innovation_var
+        
+        return self.estimate
+    
+    def reset(self, initial=0.0):
+        self.estimate = initial
+        self.error_covariance = 1.0
+        self.innovation_history = []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DATA FETCHING
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fetch_stooq_symbol(symbol, start_date, end_date):
-    """Fetch single symbol from Stooq via direct HTTP request"""
+    """Fetch single symbol from Stooq via direct HTTP request (Python 3.12+ compatible)"""
     try:
         url = f"https://stooq.com/q/d/l/?s={symbol}&d1={start_date.strftime('%Y%m%d')}&d2={end_date.strftime('%Y%m%d')}"
         response = requests.get(url, timeout=10)
@@ -624,14 +777,14 @@ def fetch_stooq_symbol(symbol, start_date, end_date):
 def fetch_macro_data(days_back=100):
     end_date = datetime.date.today()
     start_date = end_date - datetime.timedelta(days=days_back + 365)
-
-    # Fetch from Stooq via direct HTTP requests
+    
+    # Fetch from Stooq via direct HTTP requests (replaces pandas_datareader)
     stooq_df = pd.DataFrame()
     for name, symbol in MACRO_SYMBOLS_STOOQ.items():
         series = fetch_stooq_symbol(symbol, start_date, end_date)
         if series is not None and len(series) > 0:
             stooq_df[symbol] = series
-
+    
     if not stooq_df.empty:
         stooq_df = stooq_df.sort_index()
 
@@ -653,7 +806,7 @@ def fetch_macro_data(days_back=100):
             if yf_df.index.tz is not None:
                 yf_df.index = yf_df.index.tz_localize(None)
             yf_df = yf_df.sort_index()
-
+            
             # Fetch live data for today if missing
             has_today = any(idx.date() == datetime.date.today() for idx in yf_df.index)
             if not has_today:
@@ -698,7 +851,8 @@ def fetch_ticker_data(target_ticker, macro_df, days_back=100, include_live=True)
         target_df = target_df[['Open', 'High', 'Low', 'Close', 'Volume']].sort_index()
         if target_df.index.tz is not None:
             target_df.index = target_df.index.tz_localize(None)
-
+        
+        # Fetch live data for today if requested
         if include_live:
             has_today = any(idx.date() == datetime.date.today() for idx in target_df.index)
             if not has_today:
@@ -710,51 +864,256 @@ def fetch_ticker_data(target_ticker, macro_df, days_back=100, include_live=True)
                         live_df = live_df[['Open', 'High', 'Low', 'Close', 'Volume']]
                         if live_df.index.tz is not None:
                             live_df.index = live_df.index.tz_localize(None)
+                        # Append only new dates
                         new_dates = live_df.index.difference(target_df.index)
                         if len(new_dates) > 0:
                             target_df = pd.concat([target_df, live_df.loc[new_dates]]).sort_index()
                 except Exception:
                     pass
-
+        
         combined = target_df.join(macro_df, how='left').ffill()
         return combined
     except Exception:
         return None
 
-
 # ══════════════════════════════════════════════════════════════════════════════
-# SIGNAL ENGINE (delegates to nirnay_core v2.0)
+# INDICATOR LOGIC
 # ══════════════════════════════════════════════════════════════════════════════
-# All mathematical logic lives in nirnay_core.py (single source of truth).
-# These are thin wrappers for backward compatibility with the UI code.
-
-# Re-export core utilities for any direct usage in app
-sigmoid = MathUtils.sigmoid
-zscore_clipped = MathUtils.zscore_clipped
-calculate_atr = MathUtils.calculate_atr
-
 
 def calculate_msf(df, length=20, roc_len=14, clip=3.0):
-    """Wrapper: delegates to MSFCalculator in nirnay_core"""
-    calc = MSFCalculator(length, roc_len)
-    return calc.calculate(df)
+    close = df['Close']
+    
+    roc_raw = close.pct_change(roc_len, fill_method=None)
+    roc_z = zscore_clipped(roc_raw, length, clip)
+    momentum_norm = sigmoid(roc_z, 1.5)
+    
+    intrabar_dir = (df['High'] + df['Low']) / 2 - df['Open']
+    vol_ma = df['Volume'].rolling(length).mean()
+    vol_ratio = (df['Volume'] / vol_ma).fillna(1.0)
+    
+    vw_direction = (intrabar_dir * vol_ratio).rolling(length).mean()
+    price_change_imp = close.diff(5)
+    vw_impact = (price_change_imp * vol_ratio).rolling(length).mean()
+    
+    micro_raw = vw_direction - vw_impact
+    micro_z = zscore_clipped(micro_raw, length, clip)
+    micro_norm = sigmoid(micro_z, 1.5)
+    
+    trend_fast = close.rolling(5).mean()
+    trend_slow = close.rolling(length).mean()
+    trend_diff_z = zscore_clipped(trend_fast - trend_slow, length, clip)
+    
+    mom_accel_raw = close.diff(5).diff(5)
+    mom_accel_z = zscore_clipped(mom_accel_raw, length, clip)
+    
+    atr = calculate_atr(df, 14)
+    vol_adj_mom_raw = close.diff(5) / atr
+    vol_adj_mom_z = zscore_clipped(vol_adj_mom_raw, length, clip)
+    
+    mean_rev_z = zscore_clipped(close - trend_slow, length, clip)
+    
+    composite_trend_z = (trend_diff_z + mom_accel_z + vol_adj_mom_z + mean_rev_z) / np.sqrt(4.0)
+    composite_trend_norm = sigmoid(composite_trend_z, 1.5)
+    
+    typical_price = (df['High'] + df['Low'] + close) / 3
+    mf = typical_price * df['Volume']
+    mf_pos = np.where(close > close.shift(1), mf, 0)
+    mf_neg = np.where(close < close.shift(1), mf, 0)
+    
+    mf_pos_smooth = pd.Series(mf_pos, index=df.index).rolling(length).mean()
+    mf_neg_smooth = pd.Series(mf_neg, index=df.index).rolling(length).mean()
+    mf_total = mf_pos_smooth + mf_neg_smooth
+    
+    accum_ratio = mf_pos_smooth / mf_total.replace(0, np.nan)
+    accum_ratio = accum_ratio.fillna(0.5)
+    accum_norm = 2.0 * (accum_ratio - 0.5)
+    
+    pct_change = close.pct_change(fill_method=None)
+    threshold = 0.0033
+    regime_signals = np.select([pct_change > threshold, pct_change < -threshold], [1, -1], default=0)
+    regime_count = pd.Series(regime_signals, index=df.index).cumsum()
+    regime_raw = regime_count - regime_count.rolling(length).mean()
+    regime_z = zscore_clipped(regime_raw, length, clip)
+    regime_norm = sigmoid(regime_z, 1.5)
+    
+    osc_momentum = momentum_norm
+    osc_structure = (micro_norm + composite_trend_norm) / np.sqrt(2.0)
+    osc_flow = (accum_norm + regime_norm) / np.sqrt(2.0)
+    
+    msf_raw = (osc_momentum + osc_structure + osc_flow) / np.sqrt(3.0)
+    msf_signal = sigmoid(msf_raw * np.sqrt(3.0), 1.0)
+    
+    return msf_signal, micro_norm, momentum_norm, accum_norm
 
 
 def calculate_mmr(df, length=20, num_vars=5):
-    """Wrapper: delegates to MMRCalculator in nirnay_core"""
     available_macros = [v for v in MACRO_SYMBOLS.values() if v in df.columns]
-    calc = MMRCalculator(length, num_vars)
-    return calc.calculate(df, available_macros)
+    target = df['Close']
+    
+    if len(df) < length + 10 or not available_macros:
+        return pd.Series(0, index=df.index), [], pd.Series(0, index=df.index)
+
+    correlations = df[available_macros].corrwith(target).abs().sort_values(ascending=False)
+    top_drivers = correlations.head(num_vars).index.tolist()
+    
+    preds = []
+    r2_sum = 0
+    r2_sq_sum = 0
+    y_mean = target.rolling(length).mean()
+    y_std = target.rolling(length).std()
+    
+    driver_details = []
+
+    for ticker in top_drivers:
+        x = df[ticker]
+        x_mean = x.rolling(length).mean()
+        x_std = x.rolling(length).std()
+        roll_corr = x.rolling(length).corr(target)
+        slope = roll_corr * (y_std / x_std)
+        intercept = y_mean - (slope * x_mean)
+        
+        pred = (slope * x) + intercept
+        r2 = roll_corr ** 2
+        
+        preds.append(pred * r2)
+        r2_sum += r2
+        r2_sq_sum += r2 ** 2
+        
+        name = next((k for k, v in MACRO_SYMBOLS.items() if v == ticker), ticker)
+        driver_details.append({"Symbol": ticker, "Name": name, "Correlation": round(df[ticker].corr(target), 4)})
+
+    r2_sum = r2_sum.replace(0, np.nan)
+    
+    if len(preds) > 0:
+        y_predicted = sum(preds) / r2_sum
+    else:
+        y_predicted = y_mean
+
+    deviation = target - y_predicted
+    mmr_z = zscore_clipped(deviation, length, 3.0)
+    mmr_signal = sigmoid(mmr_z, 1.5)
+    
+    model_r2 = r2_sq_sum / r2_sum
+    mmr_quality = np.sqrt(model_r2.fillna(0))
+    
+    return mmr_signal, driver_details, mmr_quality
 
 
 def run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight):
-    """Wrapper: delegates to nirnay_core.run_full_analysis, enriches driver names"""
-    result_df, drivers = _core_run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight, MACRO_SYMBOLS)
-    # Core returns {"Symbol": ticker, "Correlation": val} — enrich with human-readable "Name"
-    reverse_macro = {v: k for k, v in MACRO_SYMBOLS.items()}
-    for d in drivers:
-        d["Name"] = reverse_macro.get(d["Symbol"], d["Symbol"])
-    return result_df, drivers
+    df['MSF'], df['Micro'], df['Momentum'], df['Flow'] = calculate_msf(df, length, roc_len)
+    df['MMR'], drivers, df['MMR_Quality'] = calculate_mmr(df, length, num_vars=5)
+    
+    msf_clarity = df['MSF'].abs()
+    mmr_clarity = df['MMR'].abs()
+    msf_clarity_scaled = msf_clarity.pow(regime_sensitivity)
+    mmr_clarity_scaled = (mmr_clarity * df['MMR_Quality']).pow(regime_sensitivity)
+    clarity_sum = msf_clarity_scaled + mmr_clarity_scaled + 0.001
+    
+    msf_w_adaptive = msf_clarity_scaled / clarity_sum
+    mmr_w_adaptive = mmr_clarity_scaled / clarity_sum
+    
+    msf_w_final = 0.5 * base_weight + 0.5 * msf_w_adaptive
+    mmr_w_final = 0.5 * (1.0 - base_weight) + 0.5 * mmr_w_adaptive
+    w_sum = msf_w_final + mmr_w_final
+    msf_w_norm = msf_w_final / w_sum
+    mmr_w_norm = mmr_w_final / w_sum
+    
+    unified_signal = (msf_w_norm * df['MSF']) + (mmr_w_norm * df['MMR'])
+    
+    agreement = df['MSF'] * df['MMR']
+    agree_strength = agreement.abs()
+    multiplier = np.where(agreement > 0, 1.0 + 0.2 * agree_strength, 1.0 - 0.1 * agree_strength)
+    
+    df['Unified'] = (unified_signal * multiplier).clip(-1.0, 1.0)
+    df['Unified_Osc'] = df['Unified'] * 10
+    df['MSF_Osc'] = df['MSF'] * 10
+    df['MMR_Osc'] = df['MMR'] * 10
+    df['MSF_Weight'] = msf_w_norm
+    df['MMR_Weight'] = mmr_w_norm
+    df['Agreement'] = agreement
+    
+    strong_agreement = agreement > 0.3
+    df['Buy_Signal'] = strong_agreement & (df['Unified_Osc'] < -5)
+    df['Sell_Signal'] = strong_agreement & (df['Unified_Osc'] > 5)
+    
+    osc_rising = df['Unified_Osc'] > df['Unified_Osc'].shift(1)
+    price_falling = df['Close'] < df['Close'].shift(1)
+    osc_falling = df['Unified_Osc'] < df['Unified_Osc'].shift(1)
+    price_rising = df['Close'] > df['Close'].shift(1)
+
+    df['Bullish_Div'] = osc_rising & price_falling & (df['Unified_Osc'] < -5)
+    df['Bearish_Div'] = osc_falling & price_rising & (df['Unified_Osc'] > 5)
+    
+    # Vectorized condition assignment (faster than loop)
+    df['Condition'] = np.where(df['Unified_Osc'] < -5, 'Oversold', 
+                               np.where(df['Unified_Osc'] > 5, 'Overbought', 'Neutral'))
+    
+    # === REGIME INTELLIGENCE (from AVASTHA) ===
+    hmm = AdaptiveHMM()
+    garch = GARCHDetector()
+    cusum = CUSUMDetector()
+    kalman = AdaptiveKalmanFilter()
+    
+    regimes = []
+    hmm_bulls = []
+    hmm_bears = []
+    vol_regimes = []
+    change_points = []
+    confidences = []
+    signal_history = []
+    
+    unified_vals = df['Unified'].values
+    
+    for i in range(len(df)):
+        sig = unified_vals[i] if not np.isnan(unified_vals[i]) else 0
+        
+        # Kalman filter for smoothing
+        filtered = kalman.update(sig)
+        
+        # GARCH for volatility regime
+        shock = sig - signal_history[-1] if signal_history else 0
+        garch.update(shock)
+        vol_regime, _ = garch.get_regime()
+        
+        # HMM for market state
+        hmm_probs = hmm.update(filtered)
+        
+        # CUSUM for change point detection
+        change = cusum.update(filtered)
+        
+        # Determine regime
+        bull_p = hmm_probs['BULL']
+        bear_p = hmm_probs['BEAR']
+        
+        if change:
+            regime = "TRANSITION"
+        elif bull_p > 0.6:
+            regime = "BULL"
+        elif bear_p > 0.6:
+            regime = "BEAR"
+        elif bull_p > 0.4:
+            regime = "WEAK_BULL"
+        elif bear_p > 0.4:
+            regime = "WEAK_BEAR"
+        else:
+            regime = "NEUTRAL"
+        
+        regimes.append(regime)
+        hmm_bulls.append(bull_p)
+        hmm_bears.append(bear_p)
+        vol_regimes.append(vol_regime)
+        change_points.append(change)
+        confidences.append(max(bull_p, bear_p, hmm_probs['NEUTRAL']))
+        signal_history.append(sig)
+    
+    df['Regime'] = regimes
+    df['HMM_Bull'] = hmm_bulls
+    df['HMM_Bear'] = hmm_bears
+    df['Vol_Regime'] = vol_regimes
+    df['Change_Point'] = change_points
+    df['Confidence'] = confidences
+
+    return df, drivers
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1371,8 +1730,7 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                         st.markdown(f'<div class="metric-card info"><h4>MMR (Macro)</h4><h2>{curr_mmr:.2f}</h2><div class="sub-metric">Macro Regression</div></div>', unsafe_allow_html=True)
                     with col4:
                         price_color = "success" if price_change >= 0 else "danger"
-                        curr_sym = get_currency_symbol(target_symbol)
-                        st.markdown(f'<div class="metric-card {price_color}"><h4>Price</h4><h2>{curr_sym}{curr_price:,.2f}</h2><div class="sub-metric">{"▲" if price_change >= 0 else "▼"} {abs(price_change):.2f}%</div></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="metric-card {price_color}"><h4>Price</h4><h2>₹{curr_price:,.2f}</h2><div class="sub-metric">{"▲" if price_change >= 0 else "▼"} {abs(price_change):.2f}%</div></div>', unsafe_allow_html=True)
                     
                     # Row 2: Regime Intelligence metrics (NEW)
                     st.markdown("<br>", unsafe_allow_html=True)
@@ -1418,7 +1776,7 @@ def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
                         with c1:
                             st.markdown("##### Regime Timeline")
                             # Create regime color mapping
-                            regime_colors = {'STRONG_BULL': '#059669', 'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'CRISIS': '#dc2626', 'TRANSITION': '#a855f7'}
+                            regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
                             regime_vals = display_df['Regime'].map(lambda x: regime_colors.get(x, '#888888'))
                             
                             # Count regimes
@@ -1511,7 +1869,6 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
         macro_df = fetch_macro_data(days_back=days_back)
         
         results = []
-        errors = []
         total = len(SCREENER_SYMBOLS)
         
         for i, symbol in enumerate(SCREENER_SYMBOLS):
@@ -1567,14 +1924,11 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         "Confidence": round(last_row['Confidence'], 2),
                         "Change_Point": last_row['Change_Point']
                     })
-                except Exception as e:
-                    errors.append(f"{symbol}: {str(e)[:80]}")
+                except Exception:
+                    pass
         
         progress_bar.empty()
         status_text.empty()
-        
-        if errors:
-            st.warning(f"⚠️ {len(errors)}/{total} tickers failed analysis. Sample: {errors[0]}")
         
         if results:
             st.toast(f"ETF Scan Complete! Analyzed {len(results)}/{total} ETFs", icon="✅")
@@ -1592,7 +1946,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             n_bull = len(results_df[results_df['Regime'].str.contains('BULL', na=False)])
             n_bear = len(results_df[results_df['Regime'].str.contains('BEAR', na=False)])
             n_transition = len(results_df[results_df['Regime'] == 'TRANSITION'])
-            dominant_regime = (results_df['Regime'].mode().iloc[0] if not results_df['Regime'].mode().empty else 'NEUTRAL') if len(results_df) > 0 else 'NEUTRAL'
+            dominant_regime = results_df['Regime'].mode().iloc[0] if len(results_df) > 0 else "NEUTRAL"
             regime_color = "success" if "BULL" in dominant_regime else "danger" if "BEAR" in dominant_regime else "warning" if dominant_regime == "TRANSITION" else "neutral"
             
             # Metrics row
@@ -1741,7 +2095,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                 
                 with c1:
                     regime_counts = results_df['Regime'].value_counts()
-                    regime_colors = {'STRONG_BULL': '#059669', 'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'CRISIS': '#dc2626', 'TRANSITION': '#a855f7'}
+                    regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
                     fig_regime = go.Figure(go.Pie(
                         labels=regime_counts.index, values=regime_counts.values, hole=0.5,
                         marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
@@ -1905,7 +2259,6 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
         
         # Process each stock
         results = []
-        errors = []
         valid_tickers = list(data_dict.keys())
         total_valid = len(valid_tickers)
         
@@ -1966,14 +2319,11 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                         "Confidence": round(last_row['Confidence'], 2),
                         "Change_Point": last_row['Change_Point']
                     })
-                except Exception as e:
-                    errors.append(f"{ticker}: {str(e)[:80]}")
+                except Exception:
+                    pass
         
         progress_bar.empty()
         status_text.empty()
-        
-        if errors:
-            st.warning(f"⚠️ {len(errors)}/{total_valid} tickers failed analysis. Sample: {errors[0]}")
         
         if results:
             st.toast(f"Market Scan Complete! Analyzed {len(results)}/{total_stocks} stocks", icon="✅")
@@ -1991,7 +2341,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             n_bull = len(results_df[results_df['Regime'].str.contains('BULL', na=False)])
             n_bear = len(results_df[results_df['Regime'].str.contains('BEAR', na=False)])
             n_transition = len(results_df[results_df['Regime'] == 'TRANSITION'])
-            dominant_regime = (results_df['Regime'].mode().iloc[0] if not results_df['Regime'].mode().empty else 'NEUTRAL') if len(results_df) > 0 else 'NEUTRAL'
+            dominant_regime = results_df['Regime'].mode().iloc[0] if len(results_df) > 0 else "NEUTRAL"
             regime_color = "success" if "BULL" in dominant_regime else "danger" if "BEAR" in dominant_regime else "warning" if dominant_regime == "TRANSITION" else "neutral"
             
             # Metrics row
@@ -2025,14 +2375,14 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     if not confirmed_buys.empty:
                         st.markdown('<span class="status-badge buy">CONFIRMED BUY SIGNALS</span>', unsafe_allow_html=True)
                         for _, row in confirmed_buys.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                     
                     oversold = results_df[(results_df['Zone'] == 'Oversold') & (results_df['Trigger'] != 'BUY')].sort_values('Signal').head(15)
                     if not oversold.empty:
                         st.markdown('<span class="status-badge oversold">OVERSOLD ZONE</span>', unsafe_allow_html=True)
                         for _, row in oversold.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                     
                     if confirmed_buys.empty and oversold.empty:
                         st.markdown('<p style="color: #888888; padding: 1rem;">No buy opportunities detected</p>', unsafe_allow_html=True)
@@ -2045,14 +2395,14 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     if not confirmed_sells.empty:
                         st.markdown('<span class="status-badge sell">CONFIRMED SELL SIGNALS</span>', unsafe_allow_html=True)
                         for _, row in confirmed_sells.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                     
                     overbought = results_df[(results_df['Zone'] == 'Overbought') & (results_df['Trigger'] != 'SELL')].sort_values('Signal', ascending=False).head(15)
                     if not overbought.empty:
                         st.markdown('<span class="status-badge overbought">OVERBOUGHT ZONE</span>', unsafe_allow_html=True)
                         for _, row in overbought.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {get_currency_symbol(row["Symbol"])}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                     
                     if confirmed_sells.empty and overbought.empty:
                         st.markdown('<p style="color: #888888; padding: 1rem;">No sell opportunities detected</p>', unsafe_allow_html=True)
@@ -2140,7 +2490,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                 
                 with c1:
                     regime_counts = results_df['Regime'].value_counts()
-                    regime_colors = {'STRONG_BULL': '#059669', 'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'CRISIS': '#dc2626', 'TRANSITION': '#a855f7'}
+                    regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
                     fig_regime = go.Figure(go.Pie(
                         labels=regime_counts.index, values=regime_counts.values, hole=0.5,
                         marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
@@ -2200,7 +2550,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                 with filter_col2:
                     signal_filter = st.multiselect("Filter by Trigger", ["BUY", "SELL", "-"], default=["BUY", "SELL", "-"])
                 with filter_col3:
-                    sort_by = st.selectbox("Sort by", ["Signal", "Change", "Price", "DisplayName", "Regime", "Confidence"], index=0)
+                    sort_by = st.selectbox("Sort by", ["Signal", "Change", "Price", "DisplayName"], index=0)
                 
                 # Apply filters
                 filtered_df = results_df[
@@ -2208,9 +2558,9 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     (results_df['Trigger'].isin(signal_filter))
                 ].sort_values(sort_by, ascending=(sort_by == 'DisplayName'))
                 
-                display_cols = ['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'Zone', 'Trigger', 'Regime', 'Vol_Regime', 'Confidence']
+                display_cols = ['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'Zone', 'Trigger', 'Divergence']
                 display_df = filtered_df[display_cols].copy()
-                display_df.columns = ['Symbol', 'Price', 'Chg %', 'Signal', 'MSF', 'Zone', 'Trigger', 'HMM Regime', 'Vol Regime', 'Conf']
+                display_df.columns = ['Symbol', 'Price', 'Chg %', 'Signal', 'MSF', 'Zone', 'Trigger', 'Divergence']
                 
                 st.dataframe(display_df, width="stretch", hide_index=True, height=500)
                 
@@ -2338,7 +2688,6 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         progress_bar.progress(0.15)
         
         processed_data = {}
-        errors = []
         valid_tickers = list(data_dict.keys())
         
         for i, ticker in enumerate(valid_tickers):
@@ -2354,8 +2703,8 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
                     # Run FULL analysis (MSF + MMR + Regime Intelligence)
                     df, _ = run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight)
                     processed_data[ticker] = df
-                except Exception as e:
-                    errors.append(f"{ticker}: {str(e)[:80]}")
+                except Exception:
+                    pass
             
             if (i + 1) % 50 == 0:
                 progress_bar.progress(0.15 + 0.35 * (i + 1) / len(valid_tickers))
@@ -2437,8 +2786,8 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
                     if row['Change_Point']:
                         day_stats["Change_Points"] += 1
                         
-                except Exception as e:
-                    errors.append(f"{ticker}: {str(e)[:80]}")
+                except Exception:
+                    pass
             
             if day_stats["Total_Analyzed"] > 0:
                 day_stats["Avg_Signal"] = day_stats["Signal_Sum"] / day_stats["Total_Analyzed"]
@@ -2826,7 +3175,6 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
         progress_bar.progress(0.1)
         
         processed_data = {}
-        errors = []
         total = len(SCREENER_SYMBOLS)
         
         for i, symbol in enumerate(SCREENER_SYMBOLS):
@@ -2842,8 +3190,8 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                     if df.index.tz is not None:
                         df.index = df.index.tz_localize(None)
                     processed_data[symbol] = df
-                except Exception as e:
-                    errors.append(f"{symbol}: {str(e)[:80]}")
+                except Exception:
+                    pass
         
         if not processed_data:
             st.error("Failed to process ETF data.")
@@ -2957,8 +3305,8 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                     if row['Change_Point']:
                         day_stats["Change_Points"] += 1
                         
-                except Exception as e:
-                    errors.append(f"{symbol}: {str(e)[:80]}")
+                except Exception:
+                    pass
             
             if day_stats["Total_Analyzed"] > 0:
                 day_stats["Avg_Signal"] = day_stats["Signal_Sum"] / day_stats["Total_Analyzed"]
