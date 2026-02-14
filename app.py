@@ -1448,7 +1448,7 @@ def render_sidebar():
                 with col_e1:
                     etf_start_date = st.date_input(
                         "ETF Start Date",
-                        datetime.date.today() - datetime.timedelta(days=30),
+                        datetime.date.today() - datetime.timedelta(days=100),
                         max_value=datetime.date.today(),
                         help="Start of analysis period"
                     )
@@ -1512,7 +1512,7 @@ def render_sidebar():
                 with col_d1:
                     spread_start_date = st.date_input(
                         "Start Date",
-                        datetime.date.today() - datetime.timedelta(days=30),
+                        datetime.date.today() - datetime.timedelta(days=100),
                         max_value=datetime.date.today(),
                         help="Start of analysis period"
                     )
