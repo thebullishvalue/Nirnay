@@ -281,8 +281,8 @@ MACRO_SYMBOLS = {**MACRO_SYMBOLS_STOOQ, **MACRO_SYMBOLS_YF}
 # ══════════════════════════════════════════════════════════════════════════════
 
 INDIA_INDEX_LIST = [
-    "F&O Stocks",
-    "NIFTY 50", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 200", "NIFTY 500",
+    "NIFTY 50",
+    "F&O Stocks", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 200", "NIFTY 500",
     "NIFTY MIDCAP 50", "NIFTY MIDCAP 100", "NIFTY SMLCAP 100", "NIFTY BANK",
     "NIFTY AUTO", "NIFTY FIN SERVICE", "NIFTY FMCG", "NIFTY IT",
     "NIFTY MEDIA", "NIFTY METAL", "NIFTY PHARMA"
