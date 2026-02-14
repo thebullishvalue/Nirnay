@@ -280,15 +280,18 @@ MACRO_SYMBOLS = {**MACRO_SYMBOLS_STOOQ, **MACRO_SYMBOLS_YF}
 # SPREAD SCREENER CONSTANTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-INDEX_LIST = [
+INDIA_INDEX_LIST = [
+    "F&O Stocks",
     "NIFTY 50", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 200", "NIFTY 500",
     "NIFTY MIDCAP 50", "NIFTY MIDCAP 100", "NIFTY SMLCAP 100", "NIFTY BANK",
     "NIFTY AUTO", "NIFTY FIN SERVICE", "NIFTY FMCG", "NIFTY IT",
-    "NIFTY MEDIA", "NIFTY METAL", "NIFTY PHARMA",
-    "S&P 500", "DOW JONES", "NASDAQ 100"
+    "NIFTY MEDIA", "NIFTY METAL", "NIFTY PHARMA"
 ]
 
 US_INDEX_LIST = ["S&P 500", "DOW JONES", "NASDAQ 100"]
+
+# Combined list for backward compatibility in fetch functions
+INDEX_LIST = INDIA_INDEX_LIST + US_INDEX_LIST
 
 BASE_URL = "https://www.niftyindices.com/IndexConstituent/"
 INDEX_URL_MAP = {
@@ -310,9 +313,69 @@ INDEX_URL_MAP = {
     "NIFTY PHARMA": f"{BASE_URL}ind_niftypharmalist.csv"
 }
 
-ANALYSIS_UNIVERSE_OPTIONS = ["F&O Stocks", "Index Constituents"]
+# ── Commodity Futures (Yahoo Finance) ─────────────────────────────────────────
+COMMODITY_TICKERS = {
+    "GC=F": "Gold",
+    "SI=F": "Silver",
+    "PL=F": "Platinum",
+    "PA=F": "Palladium",
+    "HG=F": "Copper",
+    "CL=F": "Crude Oil WTI",
+    "BZ=F": "Brent Crude",
+    "NG=F": "Natural Gas",
+    "RB=F": "Gasoline RBOB",
+    "HO=F": "Heating Oil",
+    "ZC=F": "Corn",
+    "ZW=F": "Wheat",
+    "ZS=F": "Soybeans",
+    "ZM=F": "Soybean Meal",
+    "ZL=F": "Soybean Oil",
+    "CT=F": "Cotton",
+    "KC=F": "Coffee",
+    "SB=F": "Sugar",
+    "CC=F": "Cocoa",
+    "OJ=F": "Orange Juice",
+    "LBS=F": "Lumber",
+    "LE=F": "Live Cattle",
+    "HE=F": "Lean Hogs",
+    "GF=F": "Feeder Cattle",
+}
+
+# ── Currency Pairs (Yahoo Finance) ────────────────────────────────────────────
+CURRENCY_TICKERS = {
+    "EURUSD=X": "EUR/USD",
+    "GBPUSD=X": "GBP/USD",
+    "USDJPY=X": "USD/JPY",
+    "USDCHF=X": "USD/CHF",
+    "AUDUSD=X": "AUD/USD",
+    "USDCAD=X": "USD/CAD",
+    "NZDUSD=X": "NZD/USD",
+    "USDINR=X": "USD/INR",
+    "EURGBP=X": "EUR/GBP",
+    "EURJPY=X": "EUR/JPY",
+    "GBPJPY=X": "GBP/JPY",
+    "AUDJPY=X": "AUD/JPY",
+    "EURCHF=X": "EUR/CHF",
+    "EURAUD=X": "EUR/AUD",
+    "GBPCHF=X": "GBP/CHF",
+    "GBPAUD=X": "GBP/AUD",
+    "USDSGD=X": "USD/SGD",
+    "USDHKD=X": "USD/HKD",
+    "USDCNH=X": "USD/CNH",
+    "USDZAR=X": "USD/ZAR",
+    "USDMXN=X": "USD/MXN",
+    "USDTRY=X": "USD/TRY",
+    "USDBRL=X": "USD/BRL",
+    "USDKRW=X": "USD/KRW",
+}
+
+ANALYSIS_UNIVERSE_OPTIONS = ["India Indexes", "US Indexes", "Commodities", "Currency"]
 
 def get_display_name(symbol):
+    if symbol in COMMODITY_TICKERS:
+        return COMMODITY_TICKERS[symbol]
+    if symbol in CURRENCY_TICKERS:
+        return CURRENCY_TICKERS[symbol]
     return SYMBOL_NAMES.get(symbol, symbol.replace(".NS", ""))
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -457,6 +520,18 @@ def get_us_index_stock_list(index):
         
     except Exception as e:
         return None, f"Error fetching {index}: {e}"
+
+
+def get_commodity_list():
+    """Return all commodity futures tickers for analysis"""
+    tickers = list(COMMODITY_TICKERS.keys())
+    return tickers, f"✓ Loaded {len(tickers)} commodity futures"
+
+
+def get_currency_list():
+    """Return all currency pair tickers for analysis"""
+    tickers = list(CURRENCY_TICKERS.keys())
+    return tickers, f"✓ Loaded {len(tickers)} currency pairs"
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1399,14 +1474,20 @@ def render_sidebar():
             spread_universe = st.selectbox(
                 "Analysis Universe",
                 ANALYSIS_UNIVERSE_OPTIONS,
-                help="Choose between F&O stocks or specific index constituents"
+                help="Choose India/US index constituents, Commodities, or Currency pairs"
             )
-            if spread_universe == "Index Constituents":
+            if spread_universe == "India Indexes":
                 spread_index = st.selectbox(
                     "Select Index",
-                    INDEX_LIST,
-                    index=INDEX_LIST.index("NIFTY 500"),
-                    help="Select the index for constituent analysis"
+                    INDIA_INDEX_LIST,
+                    index=INDIA_INDEX_LIST.index("F&O Stocks"),
+                    help="F&O Stocks or select a specific NIFTY index for constituent analysis"
+                )
+            elif spread_universe == "US Indexes":
+                spread_index = st.selectbox(
+                    "Select Index",
+                    US_INDEX_LIST,
+                    help="Select the US index for constituent analysis"
                 )
             
             st.markdown('<div class="sidebar-title">📊 Analysis Type</div>', unsafe_allow_html=True)
@@ -1500,10 +1581,11 @@ def run_home_page():
             <br>
             <p style='color: var(--text-secondary); font-size: 0.85rem;'>
                 <strong>Features:</strong><br>
-                • F&O Stocks Universe<br>
-                • 19 Index Constituents (incl. S&amp;P 500, Dow Jones, NASDAQ 100)<br>
-                • Time Series Analysis<br>
-                • Volatility Regime (GARCH)
+                • India Indexes (F&amp;O Stocks + 16 NIFTY indices)<br>
+                • US Indexes (S&amp;P 500, Dow Jones, NASDAQ 100)<br>
+                • Commodities (24 futures)<br>
+                • Currency (24 pairs)<br>
+                • Time Series Analysis
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -1623,15 +1705,17 @@ def run_home_page():
     # Quick stats
     st.markdown("### 📊 System Coverage")
     
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         st.markdown(f'<div class="metric-card neutral"><h4>ETF Universe</h4><h2>{len(SCREENER_SYMBOLS)}</h2><div class="sub-metric">Curated ETFs</div></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f'<div class="metric-card neutral"><h4>Index Options</h4><h2>{len(INDEX_LIST)}</h2><div class="sub-metric">NSE Indices</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card neutral"><h4>Index Options</h4><h2>{len(INDIA_INDEX_LIST) + len(US_INDEX_LIST)}</h2><div class="sub-metric">India + US Indices</div></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown(f'<div class="metric-card neutral"><h4>Macro Factors</h4><h2>{len(MACRO_SYMBOLS)}</h2><div class="sub-metric">Correlation Drivers</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card neutral"><h4>Commodities</h4><h2>{len(COMMODITY_TICKERS)}</h2><div class="sub-metric">Futures Contracts</div></div>', unsafe_allow_html=True)
     with c4:
-        st.markdown(f'<div class="metric-card neutral"><h4>Analysis Modes</h4><h2>3</h2><div class="sub-metric">Screener Types</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card neutral"><h4>Currency</h4><h2>{len(CURRENCY_TICKERS)}</h2><div class="sub-metric">FX Pairs</div></div>', unsafe_allow_html=True)
+    with c5:
+        st.markdown(f'<div class="metric-card neutral"><h4>Universes</h4><h2>{len(ANALYSIS_UNIVERSE_OPTIONS)}</h2><div class="sub-metric">Analysis Scopes</div></div>', unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -2191,24 +2275,35 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
     is_today = analysis_date == datetime.date.today()
     
     # Display universe info
-    if spread_universe == "F&O Stocks":
+    if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
         universe_title = "F&O Stocks"
-        st.markdown(f"""
-        <div class='info-box'>
-            <h4>📊 Market Screener - {universe_title}</h4>
-            <p>Full NIRNAY (MSF + MMR + Regime) analysis across all F&O securities from NSE.<br>
-            <strong>Analysis Date:</strong> {analysis_date_str} {"(Today)" if is_today else ""}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
+        universe_desc = "Full NIRNAY (MSF + MMR + Regime) analysis across all F&O securities from NSE."
+    elif spread_universe in ("India Indexes", "US Indexes"):
         universe_title = spread_index if spread_index else "Index"
-        st.markdown(f"""
-        <div class='info-box'>
-            <h4>📊 Market Screener - {universe_title}</h4>
-            <p>Full NIRNAY (MSF + MMR + Regime) analysis across all constituents of {universe_title}.<br>
-            <strong>Analysis Date:</strong> {analysis_date_str} {"(Today)" if is_today else ""}</p>
-        </div>
-        """, unsafe_allow_html=True)
+        universe_desc = f"Full NIRNAY (MSF + MMR + Regime) analysis across all constituents of {universe_title}."
+    elif spread_universe == "Commodities":
+        universe_title = "Commodities"
+        universe_desc = f"Full NIRNAY (MSF + MMR + Regime) analysis across {len(COMMODITY_TICKERS)} commodity futures."
+    elif spread_universe == "Currency":
+        universe_title = "Currency"
+        universe_desc = f"Full NIRNAY (MSF + MMR + Regime) analysis across {len(CURRENCY_TICKERS)} currency pairs."
+    else:
+        universe_title = spread_universe or "Unknown"
+        universe_desc = "Full NIRNAY analysis."
+
+    # Currency symbol for price display
+    if spread_universe in ("Commodities", "US Indexes", "Currency"):
+        ccy = "$"
+    else:
+        ccy = "₹"
+
+    st.markdown(f"""
+    <div class='info-box'>
+        <h4>📊 Market Screener - {universe_title}</h4>
+        <p>{universe_desc}<br>
+        <strong>Analysis Date:</strong> {analysis_date_str} {"(Today)" if is_today else ""}</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -2224,10 +2319,16 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
         # Fetch stock list based on universe selection
         status_text.markdown(f"**⏳ Fetching {universe_title} stock list...**")
         
-        if spread_universe == "F&O Stocks":
+        if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
             stock_list, fetch_msg = get_fno_stock_list()
-        else:
+        elif spread_universe in ("India Indexes", "US Indexes"):
             stock_list, fetch_msg = get_index_stock_list(spread_index)
+        elif spread_universe == "Commodities":
+            stock_list, fetch_msg = get_commodity_list()
+        elif spread_universe == "Currency":
+            stock_list, fetch_msg = get_currency_list()
+        else:
+            stock_list, fetch_msg = None, "Unknown universe"
         
         if not stock_list:
             st.error(f"Failed to fetch stock list: {fetch_msg}")
@@ -2348,7 +2449,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             st.markdown("<br>", unsafe_allow_html=True)
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             with c1:
-                st.markdown(f'<div class="metric-card info"><h4>Universe</h4><h2>{len(results)}</h2><div class="sub-metric">Stocks Analyzed</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-card info"><h4>Universe</h4><h2>{len(results)}</h2><div class="sub-metric">{universe_title} Analyzed</div></div>', unsafe_allow_html=True)
             with c2:
                 st.markdown(f'<div class="metric-card success"><h4>Oversold</h4><h2>{n_oversold}</h2><div class="sub-metric">Buy Zone</div></div>', unsafe_allow_html=True)
             with c3:
@@ -2375,14 +2476,14 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     if not confirmed_buys.empty:
                         st.markdown('<span class="status-badge buy">CONFIRMED BUY SIGNALS</span>', unsafe_allow_html=True)
                         for _, row in confirmed_buys.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                     
                     oversold = results_df[(results_df['Zone'] == 'Oversold') & (results_df['Trigger'] != 'BUY')].sort_values('Signal').head(15)
                     if not oversold.empty:
                         st.markdown('<span class="status-badge oversold">OVERSOLD ZONE</span>', unsafe_allow_html=True)
                         for _, row in oversold.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                     
                     if confirmed_buys.empty and oversold.empty:
                         st.markdown('<p style="color: #888888; padding: 1rem;">No buy opportunities detected</p>', unsafe_allow_html=True)
@@ -2395,14 +2496,14 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     if not confirmed_sells.empty:
                         st.markdown('<span class="status-badge sell">CONFIRMED SELL SIGNALS</span>', unsafe_allow_html=True)
                         for _, row in confirmed_sells.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                     
                     overbought = results_df[(results_df['Zone'] == 'Overbought') & (results_df['Trigger'] != 'SELL')].sort_values('Signal', ascending=False).head(15)
                     if not overbought.empty:
                         st.markdown('<span class="status-badge overbought">OVERBOUGHT ZONE</span>', unsafe_allow_html=True)
                         for _, row in overbought.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
                     
                     if confirmed_sells.empty and overbought.empty:
                         st.markdown('<p style="color: #888888; padding: 1rem;">No sell opportunities detected</p>', unsafe_allow_html=True)
@@ -2596,7 +2697,16 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
     date_range_days = (end_date - start_date).days
     
     # Display info
-    universe_title = spread_index if spread_universe == "Index Constituents" and spread_index else "F&O Stocks"
+    if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
+        universe_title = "F&O Stocks"
+    elif spread_universe == "Commodities":
+        universe_title = "Commodities"
+    elif spread_universe == "Currency":
+        universe_title = "Currency"
+    elif spread_universe in ("India Indexes", "US Indexes") and spread_index:
+        universe_title = spread_index
+    else:
+        universe_title = spread_universe or "Unknown"
     st.markdown(f"""
     <div class='info-box'>
         <h4>📈 Time Series Analysis - {universe_title}</h4>
@@ -2614,10 +2724,16 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         # Fetch stock list
         status_text.markdown(f"**⏳ Fetching {universe_title} stock list...**")
         
-        if spread_universe == "F&O Stocks":
+        if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
             stock_list, fetch_msg = get_fno_stock_list()
-        else:
+        elif spread_universe in ("India Indexes", "US Indexes"):
             stock_list, fetch_msg = get_index_stock_list(spread_index)
+        elif spread_universe == "Commodities":
+            stock_list, fetch_msg = get_commodity_list()
+        elif spread_universe == "Currency":
+            stock_list, fetch_msg = get_currency_list()
+        else:
+            stock_list, fetch_msg = None, "Unknown universe"
         
         if not stock_list:
             st.error(f"Failed to fetch stock list: {fetch_msg}")
