@@ -1480,7 +1480,7 @@ def render_sidebar():
                 spread_index = st.selectbox(
                     "Select Index",
                     INDIA_INDEX_LIST,
-                    index=INDIA_INDEX_LIST.index("F&O Stocks"),
+                    index=INDIA_INDEX_LIST.index("NIFTY 50"),
                     help="F&O Stocks or select a specific NIFTY index for constituent analysis"
                 )
             elif spread_universe == "US Indexes":
