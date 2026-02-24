@@ -417,9 +417,73 @@ def get_fno_stock_list():
         return None, f"Error: {e}"
 
 
+INDIA_INDEX_WIKI_MAP = {
+    "NIFTY 50": "https://en.wikipedia.org/wiki/NIFTY_50",
+    "NIFTY NEXT 50": "https://en.wikipedia.org/wiki/NIFTY_Next_50",
+    "NIFTY 500": "https://en.wikipedia.org/wiki/NIFTY_500",
+    # NIFTY 100 = NIFTY 50 + NIFTY NEXT 50 (constructed from both pages)
+}
+
+
+def _fetch_india_index_from_wikipedia(index):
+    """Fallback: Fetch Indian index constituents from Wikipedia when niftyindices.com is unreachable"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+
+    def _parse_wiki_table(url, min_count=10):
+        """Parse a Wikipedia page and extract NSE symbols from the constituent table"""
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        tables = pd.read_html(io.StringIO(response.text))
+        for tbl in tables:
+            if 'Symbol' in tbl.columns:
+                symbols = tbl['Symbol'].dropna().astype(str).str.strip().tolist()
+                symbols = [s for s in symbols if s and len(s) <= 20 and s != 'nan']
+                if len(symbols) >= min_count:
+                    return symbols
+        return None
+
+    try:
+        # NIFTY 100 is constructed from NIFTY 50 + NIFTY NEXT 50
+        if index == "NIFTY 100":
+            n50 = _parse_wiki_table(INDIA_INDEX_WIKI_MAP["NIFTY 50"], min_count=40)
+            nn50 = _parse_wiki_table(INDIA_INDEX_WIKI_MAP["NIFTY NEXT 50"], min_count=40)
+            if n50 and nn50:
+                combined = list(dict.fromkeys(n50 + nn50))  # deduplicate preserving order
+                symbols_ns = [s + ".NS" for s in combined]
+                return symbols_ns, f"⚠ niftyindices.com unavailable → Loaded {len(symbols_ns)} NIFTY 100 constituents from Wikipedia (NIFTY 50 + Next 50)"
+            return None, "Wikipedia fallback failed for NIFTY 100"
+
+        # NIFTY 200 — use NIFTY 500 Wikipedia page (first 200 by order)
+        if index == "NIFTY 200":
+            symbols = _parse_wiki_table(INDIA_INDEX_WIKI_MAP["NIFTY 500"], min_count=100)
+            if symbols:
+                symbols_200 = symbols[:200]
+                symbols_ns = [s + ".NS" for s in symbols_200]
+                return symbols_ns, f"⚠ niftyindices.com unavailable → Loaded {len(symbols_ns)} NIFTY 200 constituents from Wikipedia (top 200 of NIFTY 500)"
+            return None, "Wikipedia fallback failed for NIFTY 200"
+
+        # Direct Wikipedia lookup for NIFTY 50, NIFTY NEXT 50, NIFTY 500
+        wiki_url = INDIA_INDEX_WIKI_MAP.get(index)
+        if wiki_url:
+            min_expected = {"NIFTY 50": 40, "NIFTY NEXT 50": 40, "NIFTY 500": 400}.get(index, 10)
+            symbols = _parse_wiki_table(wiki_url, min_count=min_expected)
+            if symbols:
+                symbols_ns = [s + ".NS" for s in symbols]
+                return symbols_ns, f"⚠ niftyindices.com unavailable → Loaded {len(symbols_ns)} {index} constituents from Wikipedia"
+            return None, f"Wikipedia fallback: could not parse {index} table"
+
+        # No Wikipedia fallback available for this index (sectoral/midcap)
+        return None, None  # Signal: no fallback available
+
+    except Exception as e:
+        return None, f"Wikipedia fallback error: {e}"
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_index_stock_list(index):
-    """Fetch index constituents from NSE Indices or US Indices"""
+    """Fetch index constituents from NSE Indices with Wikipedia fallback, or US Indices"""
     # Route US indices to separate handler
     if index in US_INDEX_LIST:
         return get_us_index_stock_list(index)
@@ -427,7 +491,9 @@ def get_index_stock_list(index):
     url = INDEX_URL_MAP.get(index)
     if not url:
         return None, f"No URL for {index}"
-        
+
+    # ── Primary: niftyindices.com CSV ──
+    primary_error = None
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -443,10 +509,25 @@ def get_index_stock_list(index):
             symbols_ns = [str(s) + ".NS" for s in symbols if s and str(s).strip()]
             return symbols_ns, f"✓ Fetched {len(symbols_ns)} constituents"
         else:
-            return None, f"No Symbol column found"
+            primary_error = "No Symbol column found in CSV"
             
     except Exception as e:
-        return None, f"Error: {e}"
+        primary_error = str(e)
+
+    # ── Fallback: Wikipedia ──
+    wiki_result, wiki_msg = _fetch_india_index_from_wikipedia(index)
+    if wiki_result:
+        return wiki_result, wiki_msg
+
+    # Both failed — return informative error
+    fallback_note = ""
+    if wiki_msg is None:
+        # No Wikipedia fallback exists for this index
+        fallback_note = " (no Wikipedia fallback available for this index — try NIFTY 50/100/500 or retry later)"
+    elif wiki_msg:
+        fallback_note = f" | {wiki_msg}"
+
+    return None, f"Error: {primary_error}{fallback_note}"
 
 
 # Hardcoded Dow Jones 30 components (updated periodically — small stable list)
