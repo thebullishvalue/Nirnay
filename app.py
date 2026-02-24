@@ -2417,7 +2417,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             status_text.empty()
             return
         
-        st.toast(fetch_msg, icon="✅")
+        st.toast(fetch_msg, icon="⚠️" if fetch_msg.startswith("⚠") else "✅")
         total_stocks = len(stock_list)
         
         # Batch download data
@@ -2822,7 +2822,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             status_text.empty()
             return
         
-        st.toast(fetch_msg, icon="✅")
+        st.toast(fetch_msg, icon="⚠️" if fetch_msg.startswith("⚠") else "✅")
         total_stocks = len(stock_list)
         
         # Batch download data for entire period
