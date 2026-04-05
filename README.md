@@ -1,9 +1,9 @@
 # NIRNAY (निर्णय) — Unified Market Analysis
 
 **Quantitative Signal + Regime Intelligence System**
-A Pragyam Product Family Member | Hemrek Capital
+A Pragyam Product Family Member | @thebullishvalue
 
-Version 1.1.0
+Version 1.1.1
 
 ---
 
@@ -13,27 +13,54 @@ NIRNAY combines signal generation (MSF + MMR) with regime intelligence (HMM, GAR
 
 ---
 
-## Modules
+## System Architecture
 
-### ETF Screener
+```
+┌─────────────────────────────────────────────────────────┐
+│                    NIRNAY Application                    │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────────────┐         ┌──────────────────────┐  │
+│  │    app.py        │         │   nirnay_core.py     │  │
+│  │  (Streamlit App) │         │  (Analysis Library)  │  │
+│  │                  │         │                      │  │
+│  │  • UI & Layout   │         │  • NirnayEngine      │  │
+│  │  • Data Fetching │         │  • MSFCalculator     │  │
+│  │  • Charting      │         │  • MMRCalculator     │  │
+│  │  • Screener Logic│         │  • AdaptiveKalman    │  │
+│  │  • Inline Models │         │  • AdaptiveHMM       │  │
+│  │                  │         │  • GARCHDetector     │  │
+│  │  Regime Models:  │         │  • CUSUMDetector     │  │
+│  │  • AdaptiveHMM   │         │  • MathUtils         │  │
+│  │  • GARCHDetector │         │  • run_batch_analysis│  │
+│  │  • CUSUMDetector │         │                      │  │
+│  │  • KalmanFilter  │         │  Fully typed,        │  │
+│  │                  │         │  dataclass-based     │  │
+│  └──────────────────┘         └──────────────────────┘  │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │              Data Layer                          │   │
+│  │                                                  │   │
+│  │  Yahoo Finance (yfinance)  —  Price & Volume     │   │
+│  │  Stooq HTTP API            —  Bond Yields         │   │
+│  │  NSE Indices / Wikipedia   —  Index Constituents  │   │
+│  │                                                  │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
 
-- Full MSF + MMR + Regime analysis across 30 curated global ETFs
-- Single-day and time-series modes
-- Macro correlation analysis and HMM regime detection
+### Two-Module Design
 
-### Market Screener
+**`app.py` — Self-Contained Streamlit Application**
 
-- MSF-based signal analysis for Indian F&O stocks, index constituents, commodities, and currencies
-- Single-day and time-series tracking
-- Volatility regime classification (GARCH)
+The primary entry point. A fully independent Streamlit app with inline implementations of all regime intelligence models (HMM, GARCH, CUSUM, Kalman Filter). Contains the complete UI layer, data fetching pipeline, chart generation, and screener logic. Runs standalone: `streamlit run app.py`.
 
-### Chart Analysis
+**`nirnay_core.py` — Reusable Analysis Library**
 
-- Individual security deep-dive
-- Price candlestick and oscillator charts
-- HMM state probability visualization
-- CUSUM change-point detection
-- Macro driver correlation breakdown
+A production-ready, OOP-style Python library with full type hints, dataclasses, and clean exports. Implements the same signal generation and regime detection algorithms in a class-based architecture designed for use by external tools, tests, or other applications. Exports `NirnayEngine`, `MSFCalculator`, `MMRCalculator`, `AdaptiveKalmanFilter`, `AdaptiveHMM`, `GARCHDetector`, `CUSUMDetector`, `MathUtils`, and `run_batch_analysis`.
+
+Both modules implement the same core algorithms independently — `app.py` uses a functional style optimized for Streamlit's execution model, while `nirnay_core.py` uses an object-oriented design for library reuse.
 
 ---
 
@@ -90,6 +117,31 @@ NIRNAY combines signal generation (MSF + MMR) with regime intelligence (HMM, GAR
 
 ---
 
+## Application Modules
+
+### ETF Screener
+
+- Full MSF + MMR + Regime analysis across 30 curated global ETFs
+- Single-day and time-series modes
+- Macro correlation analysis and HMM regime detection
+
+### Market Screener
+
+- MSF-based signal analysis for Indian F&O stocks, index constituents, commodities, and currencies
+- Universe options: India Indexes, US Indexes, Commodities, Currency
+- Single-day and time-series tracking
+- Volatility regime classification (GARCH)
+
+### Chart Analysis
+
+- Individual security deep-dive
+- Price candlestick and oscillator charts
+- HMM state probability visualization
+- CUSUM change-point detection
+- Macro driver correlation breakdown
+
+---
+
 ## Getting Started
 
 ```bash
@@ -112,11 +164,23 @@ streamlit run app.py
 
 ```
 Nirnay/
-├── app.py            # Streamlit application (UI + analysis engine)
-├── nirnay_core.py    # Standalone analysis core (dataclasses, engines)
+├── app.py            # Streamlit application (UI + data fetching + inline models)
+├── nirnay_core.py    # Standalone analysis library (OOP engine, typed, exportable)
 ├── requirements.txt  # Python dependencies
-└── README.md         # Documentation
+├── CHANGELOG.md      # Version history and release notes
+└── README.md         # This file — documentation and architecture
 ```
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a full history of changes.
+
+### Latest — v1.1.1 (2026-04-05)
+- Synchronized version numbers across all files
+- Full codebase audit and production preparation
+- Created CHANGELOG.md for version tracking
 
 ---
 
@@ -135,4 +199,4 @@ Nirnay/
 
 ## License
 
-Proprietary — Pragyam Product Family, Hemrek Capital
+Proprietary — Pragyam Product Family, @thebullishvalue

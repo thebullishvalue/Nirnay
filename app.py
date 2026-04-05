@@ -3,7 +3,7 @@ NIRNAY (निर्णय) - Unified Market Analysis | A Pragyam Product Family
 Quantitative Signal + Regime Intelligence System
 
 Combines:
-- MSF (Market Strength Factor) - Price structure analysis  
+- MSF (Market Strength Factor) - Price structure analysis
 - MMR (Macro-Micro Regime) - Macro correlation analysis
 - HMM (Hidden Markov Model) - Regime state detection
 - GARCH - Volatility regime analysis
@@ -36,9 +36,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-VERSION = "v1.1.0"
+VERSION = "v1.1.1"
 PRODUCT_NAME = "Nirnay"
-COMPANY = "Hemrek Capital"
+COMPANY = "@thebullishvalue"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PRAGYAM DESIGN SYSTEM CSS

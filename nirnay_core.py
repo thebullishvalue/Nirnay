@@ -16,7 +16,7 @@ This module integrates:
 The key innovation: Signals are REGIME-AWARE and use ADAPTIVE thresholds
 instead of fixed values like "overbought > 5".
 
-Version: 1.0.0
+Version: 1.1.1
 """
 
 import numpy as np
