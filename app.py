@@ -1221,32 +1221,30 @@ def render_sidebar():
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
-        # Dynamic action button based on mode selection
+        # Dynamic action button based on mode selection (hidden on Home page)
         run_clicked = False
-        button_text = "SELECT MODE"
-        button_disabled = True
 
-        if mode == "Home":
-            button_text = "HOME"
+        if mode != "Home":
+            button_text = "SELECT MODE"
             button_disabled = True
-        elif "ETF" in mode:
-            if etf_mode and "Single" in etf_mode:
-                button_text = "RUN ETF SCREENER"
-                button_disabled = False
-            elif etf_mode and "Time Series" in etf_mode:
-                button_text = "RUN ETF TIME SERIES"
-                button_disabled = False
-        elif "Market" in mode:
-            if spread_mode and "Single" in spread_mode:
-                button_text = "RUN MARKET SCREENER"
-                button_disabled = False
-            elif spread_mode and "Time Series" in spread_mode:
-                button_text = "RUN MARKET TIME SERIES"
-                button_disabled = False
 
-        run_clicked = st.button(button_text, type="primary", use_container_width=True, disabled=button_disabled, key="sidebar_run_btn")
+            if "ETF" in mode:
+                if etf_mode and "Single" in etf_mode:
+                    button_text = "RUN ETF SCREENER"
+                    button_disabled = False
+                elif etf_mode and "Time Series" in etf_mode:
+                    button_text = "RUN ETF TIME SERIES"
+                    button_disabled = False
+            elif "Market" in mode:
+                if spread_mode and "Single" in spread_mode:
+                    button_text = "RUN MARKET SCREENER"
+                    button_disabled = False
+                elif spread_mode and "Time Series" in spread_mode:
+                    button_text = "RUN MARKET TIME SERIES"
+                    button_disabled = False
 
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            run_clicked = st.button(button_text, type="primary", use_container_width=True, disabled=button_disabled, key="sidebar_run_btn")
+            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown(f"""
         <div class="system-spec">
             <div class="spec-row"><span class="spec-label">Version</span><span class="spec-value">{VERSION}</span></div>
