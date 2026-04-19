@@ -22,6 +22,10 @@ import requests
 import io
 import urllib3
 
+# Obsidian Quant Design System
+import ui.theme as theme
+import ui.components as comps
+
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -32,205 +36,29 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 st.set_page_config(
     page_title="NIRNAY | Unified Market Analysis",
     layout="wide",
-    page_icon="📊",
-    initial_sidebar_state="expanded"
+    page_icon=None,
+    initial_sidebar_state="collapsed"
 )
 
-VERSION = "v1.1.1"
-PRODUCT_NAME = "Nirnay"
-COMPANY = "@thebullishvalue"
+from core.config import (
+    VERSION, PRODUCT_NAME, COMPANY,
+    COLOR_GREEN, COLOR_RED, COLOR_GOLD, COLOR_CYAN, COLOR_AMBER, COLOR_PURPLE, COLOR_MUTED,
+    UI_CHART_HEIGHT_SMALL, UI_CHART_HEIGHT_MEDIUM, UI_CHART_HEIGHT_LARGE, UI_CHART_HEIGHT_XLARGE, UI_CHART_HEIGHT_STACKED,
+    UI_BREADTH_HIGH, UI_CONVICTION_STRONG, UI_CONVICTION_MODERATE,
+)
+from ui.theme import chart_layout, style_axes
+from universe import (
+    ETF_UNIVERSE, INDIA_INDEX_LIST, US_INDEX_LIST, MARKET_UNIVERSE_OPTIONS,
+    COMMODITY_TICKERS, CURRENCY_TICKERS, get_fno_stock_list, get_index_stock_list,
+    get_commodity_list, get_currency_list
+)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PRAGYAM DESIGN SYSTEM CSS
+# DESIGN SYSTEM INJECTION
 # ══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    
-    :root {
-        --primary-color: #FFC300;
-        --primary-rgb: 255, 195, 0;
-        --background-color: #0F0F0F;
-        --secondary-background-color: #1A1A1A;
-        --bg-card: #1A1A1A;
-        --bg-elevated: #2A2A2A;
-        --text-primary: #EAEAEA;
-        --text-secondary: #EAEAEA;
-        --text-muted: #888888;
-        --border-color: #2A2A2A;
-        --border-light: #3A3A3A;
-        --success-green: #10b981;
-        --danger-red: #ef4444;
-        --warning-amber: #f59e0b;
-        --info-cyan: #06b6d4;
-        --neutral: #888888;
-    }
-    
-    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-    .main, [data-testid="stSidebar"] { background-color: var(--background-color); color: var(--text-primary); }
-    .stApp > header { background-color: transparent; }
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .block-container { padding-top: 3.5rem; max-width: 90%; padding-left: 2rem; padding-right: 2rem; }
-    
-    /* Sidebar toggle button - always visible */
-    [data-testid="collapsedControl"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        background-color: var(--secondary-background-color) !important;
-        border: 2px solid var(--primary-color) !important;
-        border-radius: 8px !important;
-        padding: 10px !important;
-        margin: 12px !important;
-        box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.4) !important;
-        z-index: 999999 !important;
-        position: fixed !important;
-        top: 14px !important;
-        left: 14px !important;
-        width: 40px !important;
-        height: 40px !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    
-    [data-testid="collapsedControl"]:hover {
-        background-color: rgba(var(--primary-rgb), 0.2) !important;
-        box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.6) !important;
-        transform: scale(1.05);
-    }
-    
-    [data-testid="collapsedControl"] svg {
-        stroke: var(--primary-color) !important;
-        width: 20px !important;
-        height: 20px !important;
-    }
-    
-    /* Also style the sidebar close button */
-    [data-testid="stSidebar"] button[kind="header"] {
-        background-color: transparent !important;
-        border: none !important;
-    }
-    
-    [data-testid="stSidebar"] button[kind="header"] svg {
-        stroke: var(--primary-color) !important;
-    }
-    
-    /* Ensure sidebar button is always on top */
-    button[kind="header"] {
-        z-index: 999999 !important;
-    }
-    
-    .premium-header {
-        background: var(--secondary-background-color);
-        padding: 1.25rem 2rem;
-        border-radius: 16px;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.1);
-        border: 1px solid var(--border-color);
-        position: relative;
-        overflow: hidden;
-        margin-top: 1rem;
-    }
-    
-    .premium-header::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: radial-gradient(circle at 20% 50%, rgba(var(--primary-rgb),0.08) 0%, transparent 50%);
-        pointer-events: none;
-    }
-    
-    .premium-header h1 { margin: 0; font-size: 2rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.50px; position: relative; }
-    .premium-header .tagline { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; font-weight: 400; position: relative; }
-    .premium-header .product-badge { display: inline-block; background: rgba(var(--primary-rgb), 0.15); color: var(--primary-color); padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
-    
-    .metric-card {
-        background-color: var(--bg-card);
-        padding: 1.25rem;
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.08);
-        margin-bottom: 0.5rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); border-color: var(--border-light); }
-    .metric-card h4 { color: var(--text-muted); font-size: 0.75rem; margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-    .metric-card h2 { color: var(--text-primary); font-size: 1.75rem; font-weight: 700; margin: 0; line-height: 1; }
-    .metric-card .sub-metric { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; font-weight: 500; }
-    .metric-card.success h2 { color: var(--success-green); }
-    .metric-card.danger h2 { color: var(--danger-red); }
-    .metric-card.warning h2 { color: var(--warning-amber); }
-    .metric-card.info h2 { color: var(--info-cyan); }
-    .metric-card.neutral h2 { color: var(--neutral); }
-    .metric-card.primary h2 { color: var(--primary-color); }
-    
-    .signal-card {
-        background-color: var(--bg-card);
-        padding: 1.5rem;
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.08);
-        margin-bottom: 1rem;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .signal-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
-    .signal-card.buy::before { background: var(--success-green); }
-    .signal-card.sell::before { background: var(--danger-red); }
-    .signal-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-    .signal-card-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
-    
-    .status-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-    .status-badge.buy { background: rgba(16, 185, 129, 0.15); color: var(--success-green); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .status-badge.sell { background: rgba(239, 68, 68, 0.15); color: var(--danger-red); border: 1px solid rgba(239, 68, 68, 0.3); }
-    .status-badge.oversold { background: rgba(6, 182, 212, 0.15); color: var(--info-cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
-    .status-badge.overbought { background: rgba(245, 158, 11, 0.15); color: var(--warning-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
-    .status-badge.neutral { background: rgba(136, 136, 136, 0.15); color: var(--neutral); border: 1px solid rgba(136, 136, 136, 0.3); }
-    .status-badge.divergence { background: rgba(var(--primary-rgb), 0.15); color: var(--primary-color); border: 1px solid rgba(var(--primary-rgb), 0.3); }
-    
-    .info-box { background: var(--secondary-background-color); border: 1px solid var(--border-color); border-left: 0px solid var(--primary-color); padding: 1.25rem; border-radius: 12px; margin: 0.5rem 0; box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.08); }
-    .info-box h4 { color: var(--primary-color); margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 700; }
-    .info-box p { color: var(--text-muted); margin: 0; font-size: 0.9rem; line-height: 1.6; }
-    
-    .stButton>button { border: 2px solid var(--primary-color); background: transparent; color: var(--primary-color); font-weight: 700; border-radius: 12px; padding: 0.75rem 2rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-transform: uppercase; letter-spacing: 0.5px; }
-    .stButton>button:hover { box-shadow: 0 0 25px rgba(var(--primary-rgb), 0.6); background: var(--primary-color); color: #1A1A1A; transform: translateY(-2px); }
-    .stButton>button:active { transform: translateY(0); }
-    
-    .stTabs [data-baseweb="tab-list"] { gap: 24px; background: transparent; }
-    .stTabs [data-baseweb="tab"] { color: var(--text-muted); border-bottom: 2px solid transparent; transition: color 0.3s, border-bottom 0.3s; background: transparent; font-weight: 600; }
-    .stTabs [aria-selected="true"] { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); background: transparent !important; }
-    
-    .stPlotlyChart { border-radius: 12px; background-color: var(--secondary-background-color); padding: 10px; border: 1px solid var(--border-color); box-shadow: 0 0 25px rgba(var(--primary-rgb), 0.1); }
-    .stDataFrame { border-radius: 12px; background-color: var(--secondary-background-color); border: 1px solid var(--border-color); }
-    .section-divider { height: 1px; background: linear-gradient(90deg, transparent 0%, var(--border-color) 50%, transparent 100%); margin: 1.5rem 0; }
-    
-    .symbol-row { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-radius: 8px; background: var(--bg-elevated); margin-bottom: 0.5rem; transition: all 0.2s ease; }
-    .symbol-row:hover { background: var(--border-light); }
-    .symbol-name { font-weight: 700; color: var(--text-primary); font-size: 0.9rem; }
-    .symbol-price { color: var(--text-muted); font-size: 0.85rem; }
-    .symbol-score { font-weight: 700; font-size: 0.9rem; }
-    
-    .conviction-meter { height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden; margin-top: 0.5rem; }
-    .conviction-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
-    
-    .sidebar-title { font-size: 0.75rem; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem; }
-    
-    [data-testid="stSidebar"] { background: var(--secondary-background-color); border-right: 1px solid var(--border-color); }
-    
-    .stTextInput > div > div > input { background: var(--bg-elevated) !important; border: 1px solid var(--border-color) !important; border-radius: 8px !important; color: var(--text-primary) !important; }
-    .stTextInput > div > div > input:focus { border-color: var(--primary-color) !important; box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2) !important; }
-    
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--background-color); }
-    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
-</style>
-""", unsafe_allow_html=True)
+theme.inject_css()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONSTANTS & SYMBOLS
@@ -277,101 +105,14 @@ MACRO_SYMBOLS_YF = {
 MACRO_SYMBOLS = {**MACRO_SYMBOLS_STOOQ, **MACRO_SYMBOLS_YF}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SPREAD SCREENER CONSTANTS
+# SPREAD SCREENER CONSTANTS (imported from universe module)
 # ══════════════════════════════════════════════════════════════════════════════
 
-INDIA_INDEX_LIST = [
-    "NIFTY 50",
-    "F&O Stocks", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 200", "NIFTY 500",
-    "NIFTY MIDCAP 50", "NIFTY MIDCAP 100", "NIFTY SMLCAP 100", "NIFTY BANK",
-    "NIFTY AUTO", "NIFTY FIN SERVICE", "NIFTY FMCG", "NIFTY IT",
-    "NIFTY MEDIA", "NIFTY METAL", "NIFTY PHARMA"
-]
-
-US_INDEX_LIST = ["S&P 500", "DOW JONES", "NASDAQ 100"]
-
-# Combined list for backward compatibility in fetch functions
+# Combined list for backward compatibility
 INDEX_LIST = INDIA_INDEX_LIST + US_INDEX_LIST
 
-BASE_URL = "https://www.niftyindices.com/IndexConstituent/"
-INDEX_URL_MAP = {
-    "NIFTY 50": f"{BASE_URL}ind_nifty50list.csv",
-    "NIFTY NEXT 50": f"{BASE_URL}ind_niftynext50list.csv",
-    "NIFTY 100": f"{BASE_URL}ind_nifty100list.csv",
-    "NIFTY 200": f"{BASE_URL}ind_nifty200list.csv",
-    "NIFTY 500": f"{BASE_URL}ind_nifty500list.csv",
-    "NIFTY MIDCAP 50": f"{BASE_URL}ind_niftymidcap50list.csv",
-    "NIFTY MIDCAP 100": f"{BASE_URL}ind_niftymidcap100list.csv",
-    "NIFTY SMLCAP 100": f"{BASE_URL}ind_niftysmallcap100list.csv",
-    "NIFTY BANK": f"{BASE_URL}ind_niftybanklist.csv",
-    "NIFTY AUTO": f"{BASE_URL}ind_niftyautolist.csv",
-    "NIFTY FIN SERVICE": f"{BASE_URL}ind_niftyfinancelist.csv",
-    "NIFTY FMCG": f"{BASE_URL}ind_niftyfmcglist.csv",
-    "NIFTY IT": f"{BASE_URL}ind_niftyitlist.csv",
-    "NIFTY MEDIA": f"{BASE_URL}ind_niftymedialist.csv",
-    "NIFTY METAL": f"{BASE_URL}ind_niftymetallist.csv",
-    "NIFTY PHARMA": f"{BASE_URL}ind_niftypharmalist.csv"
-}
-
-# ── Commodity Futures (Yahoo Finance) ─────────────────────────────────────────
-COMMODITY_TICKERS = {
-    "GC=F": "Gold",
-    "SI=F": "Silver",
-    "PL=F": "Platinum",
-    "PA=F": "Palladium",
-    "HG=F": "Copper",
-    "CL=F": "Crude Oil WTI",
-    "BZ=F": "Brent Crude",
-    "NG=F": "Natural Gas",
-    "RB=F": "Gasoline RBOB",
-    "HO=F": "Heating Oil",
-    "ZC=F": "Corn",
-    "ZW=F": "Wheat",
-    "ZS=F": "Soybeans",
-    "ZM=F": "Soybean Meal",
-    "ZL=F": "Soybean Oil",
-    "CT=F": "Cotton",
-    "KC=F": "Coffee",
-    "SB=F": "Sugar",
-    "CC=F": "Cocoa",
-    "OJ=F": "Orange Juice",
-    "LBS=F": "Lumber",
-    "LE=F": "Live Cattle",
-    "HE=F": "Lean Hogs",
-    "GF=F": "Feeder Cattle",
-}
-
-# ── Currency Pairs (Yahoo Finance) ────────────────────────────────────────────
-CURRENCY_TICKERS = {
-    "EURUSD=X": "EUR/USD",
-    "GBPUSD=X": "GBP/USD",
-    "USDJPY=X": "USD/JPY",
-    "USDCHF=X": "USD/CHF",
-    "AUDUSD=X": "AUD/USD",
-    "USDCAD=X": "USD/CAD",
-    "NZDUSD=X": "NZD/USD",
-    "USDINR=X": "USD/INR",
-    "EURGBP=X": "EUR/GBP",
-    "EURJPY=X": "EUR/JPY",
-    "GBPJPY=X": "GBP/JPY",
-    "AUDJPY=X": "AUD/JPY",
-    "EURCHF=X": "EUR/CHF",
-    "EURAUD=X": "EUR/AUD",
-    "GBPCHF=X": "GBP/CHF",
-    "GBPAUD=X": "GBP/AUD",
-    "USDSGD=X": "USD/SGD",
-    "USDHKD=X": "USD/HKD",
-    "USDCNH=X": "USD/CNH",
-    "USDZAR=X": "USD/ZAR",
-    "USDMXN=X": "USD/MXN",
-    "USDTRY=X": "USD/TRY",
-    "USDBRL=X": "USD/BRL",
-    "USDKRW=X": "USD/KRW",
-}
-
-ANALYSIS_UNIVERSE_OPTIONS = ["India Indexes", "US Indexes", "Commodities", "Currency"]
-
 def get_display_name(symbol):
+    """Map ticker symbol to human-readable display name."""
     if symbol in COMMODITY_TICKERS:
         return COMMODITY_TICKERS[symbol]
     if symbol in CURRENCY_TICKERS:
@@ -382,39 +123,17 @@ def get_display_name(symbol):
 # UNIVERSE SELECTION FUNCTIONS (for Spread Screener)
 # ══════════════════════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def get_fno_stock_list():
-    """Fetch F&O stock list from NSE"""
-    try:
-        stock_data = nse_get_advances_declines()
-        if not isinstance(stock_data, pd.DataFrame):
-            return None, f"API returned unexpected type: {type(stock_data)}"
-        
-        symbols = None
-        if 'SYMBOL' in stock_data.columns:
-            symbols = stock_data['SYMBOL'].tolist()
-        elif 'symbol' in stock_data.columns:
-            symbols = stock_data['symbol'].tolist()
-        elif stock_data.index.name in ['SYMBOL', 'symbol']:
-            symbols = stock_data.index.tolist()
-        else:
-            if isinstance(stock_data.index, pd.RangeIndex):
-                return None, f"Could not find SYMBOL column"
-            elif len(stock_data.index) > 0:
-                symbols = stock_data.index.tolist()
-
-        if symbols is None:
-             return None, f"Could not extract symbols"
-            
-        symbols_ns = [str(s) + ".NS" for s in symbols if s and str(s).strip()]
-        
-        if not symbols_ns:
-            return None, "Symbol list empty after cleaning"
-
-        return symbols_ns, f"✓ Fetched {len(symbols_ns)} F&O securities"
-            
-    except Exception as e:
-        return None, f"Error: {e}"
+    """Return list of major F&O stocks (most liquid NSE derivatives universe)."""
+    fno_stocks = [
+        "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFC.NS", "ICICIBANK.NS",
+        "KOTAK.NS", "BAJAJFINSV.NS", "ITC.NS", "LT.NS", "MARUTI.NS",
+        "ASIANPAINT.NS", "SUNPHARMA.NS", "WIPRO.NS", "ADANIPORT.NS", "ADANIGREEN.NS",
+        "POWERGRID.NS", "JSWSTEEL.NS", "TATASTEEL.NS", "SBIN.NS", "AXISBANK.NS",
+        "ULTRACEMCO.NS", "HCLTECH.NS", "BHARATIARTL.NS", "TECHM.NS", "BAJAJ-AUTO.NS",
+        "HEROMOTOCO.NS", "M&M.NS", "EICHERMOT.NS", "HINDALCO.NS", "NTPC.NS"
+    ]
+    return fno_stocks, f"✓ {len(fno_stocks)} F&O stocks available"
 
 
 INDIA_INDEX_WIKI_MAP = {
@@ -482,137 +201,6 @@ def _fetch_india_index_from_wikipedia(index):
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_index_stock_list(index):
-    """Fetch index constituents from NSE Indices with Wikipedia fallback, or US Indices"""
-    # Route US indices to separate handler
-    if index in US_INDEX_LIST:
-        return get_us_index_stock_list(index)
-    
-    url = INDEX_URL_MAP.get(index)
-    if not url:
-        return None, f"No URL for {index}"
-
-    # ── Primary: niftyindices.com CSV ──
-    primary_error = None
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        response = requests.get(url, headers=headers, verify=False, timeout=10)
-        response.raise_for_status()
-        
-        csv_file = io.StringIO(response.text)
-        stock_df = pd.read_csv(csv_file)
-        
-        if 'Symbol' in stock_df.columns:
-            symbols = stock_df['Symbol'].tolist()
-            symbols_ns = [str(s) + ".NS" for s in symbols if s and str(s).strip()]
-            return symbols_ns, f"✓ Fetched {len(symbols_ns)} constituents"
-        else:
-            primary_error = "No Symbol column found in CSV"
-            
-    except Exception as e:
-        primary_error = str(e)
-
-    # ── Fallback: Wikipedia ──
-    wiki_result, wiki_msg = _fetch_india_index_from_wikipedia(index)
-    if wiki_result:
-        return wiki_result, wiki_msg
-
-    # Both failed — return informative error
-    fallback_note = ""
-    if wiki_msg is None:
-        # No Wikipedia fallback exists for this index
-        fallback_note = " (no Wikipedia fallback available for this index — try NIFTY 50/100/500 or retry later)"
-    elif wiki_msg:
-        fallback_note = f" | {wiki_msg}"
-
-    return None, f"Error: {primary_error}{fallback_note}"
-
-
-# Hardcoded Dow Jones 30 components (updated periodically — small stable list)
-DOW_JONES_TICKERS = [
-    "AMZN", "AMGN", "AAPL", "BA", "CAT", "CSCO", "CVX", "GS", "HD", "HON",
-    "IBM", "JNJ", "JPM", "KO", "MCD", "MMM", "MRK", "MSFT", "NKE", "PG",
-    "CRM", "SHW", "TRV", "UNH", "V", "VZ", "WMT", "DIS", "DOW", "NVDA"
-]
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_us_index_stock_list(index):
-    """Fetch US index constituents from Wikipedia with hardcoded fallback for Dow Jones"""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        if index == "S&P 500":
-            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-            response = requests.get(url, headers=headers, timeout=15)
-            response.raise_for_status()
-            tables = pd.read_html(io.StringIO(response.text))
-            if tables:
-                df = tables[0]
-                if 'Symbol' in df.columns:
-                    symbols = df['Symbol'].str.strip().str.replace('.', '-', regex=False).tolist()
-                    symbols = [s for s in symbols if s and str(s).strip()]
-                    return symbols, f"✓ Fetched {len(symbols)} S&P 500 constituents"
-            return None, "Could not parse S&P 500 table"
-            
-        elif index == "DOW JONES":
-            # Dow Jones is only 30 stocks — use hardcoded list with Wikipedia refresh attempt
-            try:
-                url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
-                response = requests.get(url, headers=headers, timeout=15)
-                response.raise_for_status()
-                tables = pd.read_html(io.StringIO(response.text))
-                # Find the table with ticker symbols (usually has 'Symbol' or 'Ticker' column)
-                for tbl in tables:
-                    for col in ['Symbol', 'Ticker', 'Ticker symbol']:
-                        if col in tbl.columns:
-                            symbols = tbl[col].str.strip().tolist()
-                            symbols = [s for s in symbols if s and str(s).strip() and len(s) <= 5]
-                            if 20 <= len(symbols) <= 35:
-                                return symbols, f"✓ Fetched {len(symbols)} Dow Jones constituents"
-            except Exception:
-                pass
-            # Fallback to hardcoded list
-            return DOW_JONES_TICKERS.copy(), f"✓ Loaded {len(DOW_JONES_TICKERS)} Dow Jones constituents"
-            
-        elif index == "NASDAQ 100":
-            url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-            response = requests.get(url, headers=headers, timeout=15)
-            response.raise_for_status()
-            tables = pd.read_html(io.StringIO(response.text))
-            for tbl in tables:
-                if 'Ticker' in tbl.columns:
-                    symbols = tbl['Ticker'].str.strip().str.replace('.', '-', regex=False).tolist()
-                    symbols = [s for s in symbols if s and str(s).strip()]
-                    if len(symbols) >= 90:
-                        return symbols, f"✓ Fetched {len(symbols)} NASDAQ 100 constituents"
-                elif 'Symbol' in tbl.columns:
-                    symbols = tbl['Symbol'].str.strip().str.replace('.', '-', regex=False).tolist()
-                    symbols = [s for s in symbols if s and str(s).strip()]
-                    if len(symbols) >= 90:
-                        return symbols, f"✓ Fetched {len(symbols)} NASDAQ 100 constituents"
-            return None, "Could not parse NASDAQ 100 table"
-        
-        return None, f"Unknown US index: {index}"
-        
-    except Exception as e:
-        return None, f"Error fetching {index}: {e}"
-
-
-def get_commodity_list():
-    """Return all commodity futures tickers for analysis"""
-    tickers = list(COMMODITY_TICKERS.keys())
-    return tickers, f"✓ Loaded {len(tickers)} commodity futures"
-
-
-def get_currency_list():
-    """Return all currency pair tickers for analysis"""
-    tickers = list(CURRENCY_TICKERS.keys())
-    return tickers, f"✓ Loaded {len(tickers)} currency pairs"
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -714,15 +302,18 @@ def fetch_batch_data(stock_list, end_date=None, days_back=100, include_live=True
 # ══════════════════════════════════════════════════════════════════════════════
 
 def sigmoid(x, scale=1.0):
+    """Sigmoid activation for signal normalization."""
     return 2.0 / (1.0 + np.exp(-x / scale)) - 1.0
 
 def zscore_clipped(series, window, clip=3.0):
+    """Calculate clipped z-score to identify extreme values."""
     roll_mean = series.rolling(window=window).mean()
     roll_std = series.rolling(window=window).std()
     z = (series - roll_mean) / roll_std.replace(0, np.nan)
     return z.clip(-clip, clip).fillna(0)
 
 def calculate_atr(df, length=14):
+    """Calculate Average True Range for volatility measurement."""
     high_low = df['High'] - df['Low']
     high_close = (df['High'] - df['Close'].shift()).abs()
     low_close = (df['Low'] - df['Close'].shift()).abs()
@@ -751,11 +342,13 @@ class AdaptiveHMM:
         self.state_history = []
     
     def _gaussian_pdf(self, x, mean, std):
+        """Compute Gaussian PDF for emission probability."""
         if std < 1e-8:
             return 1.0 if abs(x - mean) < 1e-8 else 0.0
         return np.exp(-0.5 * ((x - mean) / std) ** 2) / (std * np.sqrt(2 * np.pi))
     
     def update(self, observation):
+        """Forward pass: ingest observation, update state probabilities, adapt parameters. Returns regime dict."""
         self.observation_history.append(observation)
         
         # Forward step
@@ -786,6 +379,7 @@ class AdaptiveHMM:
         return {"BULL": updated[0], "NEUTRAL": updated[1], "BEAR": updated[2]}
     
     def reset(self):
+        """Reset state history and probabilities to uniform."""
         self.state_probabilities = np.array([0.33, 0.34, 0.33])
         self.observation_history = []
         self.state_history = []
@@ -803,6 +397,7 @@ class GARCHDetector:
         self.shock_history = []
     
     def update(self, shock):
+        """Update variance estimate from price shock. Returns current volatility."""
         self.shock_history.append(shock)
         shock_sq = shock ** 2
         new_var = self.omega + self.alpha * shock_sq + self.beta * self.current_variance
@@ -815,6 +410,7 @@ class GARCHDetector:
         return np.sqrt(self.current_variance)
     
     def get_regime(self):
+        """Classify volatility regime (LOW/NORMAL/HIGH/EXTREME) with risk multiplier."""
         current_vol = np.sqrt(self.current_variance)
         long_term_vol = np.sqrt(self.long_term_mean)
         ratio = current_vol / long_term_vol if long_term_vol > 0 else 1.0
@@ -829,6 +425,7 @@ class GARCHDetector:
             return "EXTREME", 0.6
     
     def reset(self):
+        """Reset variance and shock history."""
         self.current_variance = 0.04
         self.shock_history = []
 
@@ -846,6 +443,7 @@ class CUSUMDetector:
         self.running_std = 1.0
     
     def update(self, value):
+        """Ingest value and test for change points via CUSUM. Returns True if change detected."""
         self.value_history.append(value)
         
         if len(self.value_history) >= 3:
@@ -867,6 +465,7 @@ class CUSUMDetector:
         return change_detected
     
     def reset(self):
+        """Reset CUSUM accumulators and value history."""
         self.positive_cusum = 0.0
         self.negative_cusum = 0.0
         self.value_history = []
@@ -883,6 +482,7 @@ class AdaptiveKalmanFilter:
         self.innovation_history = []
     
     def update(self, measurement):
+        """Kalman filter step: ingest measurement, compute gain, update estimate. Returns smoothed estimate."""
         predicted_estimate = self.estimate
         predicted_covariance = self.error_covariance + self.process_variance
         
@@ -904,6 +504,7 @@ class AdaptiveKalmanFilter:
         return self.estimate
     
     def reset(self, initial=0.0):
+        """Reset filter state and covariance to initial value."""
         self.estimate = initial
         self.error_covariance = 1.0
         self.innovation_history = []
@@ -931,6 +532,7 @@ def fetch_stooq_symbol(symbol, start_date, end_date):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def fetch_macro_data(days_back=100):
+    """Fetch macro indicators (yields, FX, commodities) from Stooq and Yahoo Finance."""
     end_date = datetime.date.today()
     start_date = end_date - datetime.timedelta(days=days_back + 365)
     
@@ -996,6 +598,7 @@ def fetch_macro_data(days_back=100):
 
 
 def fetch_ticker_data(target_ticker, macro_df, days_back=100, include_live=True):
+    """Fetch price data for a ticker and merge with macro indicators. Returns combined OHLCV + macro series."""
     end_date = datetime.date.today()
     start_date = end_date - datetime.timedelta(days=days_back + 365)
     try:
@@ -1037,6 +640,7 @@ def fetch_ticker_data(target_ticker, macro_df, days_back=100, include_live=True)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def calculate_msf(df, length=20, roc_len=14, clip=3.0):
+    """Calculate Market Strength Factor: composite of momentum, microstructure, and flow analysis. Returns (msf_signal, micro, momentum, flow)."""
     close = df['Close']
     
     roc_raw = close.pct_change(roc_len, fill_method=None)
@@ -1103,6 +707,7 @@ def calculate_msf(df, length=20, roc_len=14, clip=3.0):
 
 
 def calculate_mmr(df, length=20, num_vars=5):
+    """Calculate Macro-Micro Regime: rolling regression of price against top macro correlates. Returns (mmr_signal, driver_details, model_quality)."""
     available_macros = [v for v in MACRO_SYMBOLS.values() if v in df.columns]
     target = df['Close']
     
@@ -1156,6 +761,7 @@ def calculate_mmr(df, length=20, num_vars=5):
 
 
 def run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight):
+    """Unified analysis: compute MSF + MMR with adaptive weighting, agreement signals, and divergence markers. Mutates df in-place."""
     df['MSF'], df['Micro'], df['Momentum'], df['Flow'] = calculate_msf(df, length, roc_len)
     df['MMR'], drivers, df['MMR_Quality'] = calculate_mmr(df, length, num_vars=5)
     
@@ -1277,78 +883,83 @@ def run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def create_price_chart(df, symbol):
+    """Candlestick chart with 20/50 moving average overlays."""
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-        increasing_line_color='#10b981', decreasing_line_color='#ef4444',
-        increasing_fillcolor='rgba(16,185,129,0.3)', decreasing_fillcolor='rgba(239,68,68,0.3)', name='Price'
+        increasing_line_color=COLOR_GREEN, decreasing_line_color=COLOR_RED,
+        increasing_fillcolor='rgba(52,211,153,0.08)', decreasing_fillcolor='rgba(251,113,133,0.08)', name='Price'
     ))
     ma20 = df['Close'].rolling(20).mean()
-    fig.add_trace(go.Scatter(x=df.index, y=ma20, mode='lines', name='MA20', line=dict(color='#FFC300', width=1.5), opacity=0.8))
+    fig.add_trace(go.Scatter(x=df.index, y=ma20, mode='lines', name='MA20', line=dict(color=COLOR_GOLD, width=1.5)))
     ma50 = df['Close'].rolling(50).mean()
-    fig.add_trace(go.Scatter(x=df.index, y=ma50, mode='lines', name='MA50', line=dict(color='#06b6d4', width=1.5), opacity=0.8))
-    fig.update_layout(
-        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=380,
-        margin=dict(l=10, r=10, t=30, b=50),
-        xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', rangeslider=dict(visible=False)),
-        yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', side='right'),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)', font=dict(size=10, color='#888888')),
-        font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-    )
+    fig.add_trace(go.Scatter(x=df.index, y=ma50, mode='lines', name='MA50', line=dict(color=COLOR_CYAN, width=1.5)))
+    fig.update_layout(**chart_layout(height=UI_CHART_HEIGHT_XLARGE), xaxis_rangeslider_visible=False)
+    style_axes(fig, x_title="Date", y_title="Price")
     return fig
 
 
 def create_oscillator_chart(df):
+    """Unified signal oscillator with MSF/MMR components and buy/sell markers."""
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df.index, y=df['Unified_Osc'].clip(lower=0), fill='tozeroy', fillcolor='rgba(239,68,68,0.15)', line=dict(width=0), showlegend=False, hoverinfo='skip'))
-    fig.add_trace(go.Scatter(x=df.index, y=df['Unified_Osc'].clip(upper=0), fill='tozeroy', fillcolor='rgba(16,185,129,0.15)', line=dict(width=0), showlegend=False, hoverinfo='skip'))
-    
-    trace_colors = np.where(df['Unified_Osc'] < -5, '#10b981', np.where(df['Unified_Osc'] > 5, '#ef4444', '#888888'))
-    fig.add_trace(go.Scatter(x=df.index, y=df['Unified_Osc'], mode='lines+markers', name='Unified Signal', line=dict(color='#EAEAEA', width=2), marker=dict(color=trace_colors, size=6, line=dict(width=0))))
-    fig.add_trace(go.Scatter(x=df.index, y=df['MSF_Osc'], mode='lines', name='MSF (Internal)', line=dict(color='#FFC300', width=1.5, dash='dot'), opacity=0.6))
-    fig.add_trace(go.Scatter(x=df.index, y=df['MMR_Osc'], mode='lines', name='MMR (Macro)', line=dict(color='#06b6d4', width=1.5, dash='dot'), opacity=0.6))
-    
+    fig.add_trace(go.Scatter(
+        x=df.index, y=df['Unified_Osc'].clip(lower=0),
+        fill='tozeroy', fillcolor='rgba(251,113,133,0.06)',
+        line=dict(width=0), showlegend=False, hoverinfo='skip'
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index, y=df['Unified_Osc'].clip(upper=0),
+        fill='tozeroy', fillcolor='rgba(52,211,153,0.06)',
+        line=dict(width=0), showlegend=False, hoverinfo='skip'
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index, y=df['Unified_Osc'], mode='lines', name='Unified Signal',
+        line=dict(color=COLOR_MUTED, width=1.5)
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index, y=df['MSF_Osc'], mode='lines', name='MSF (Internal)',
+        line=dict(color=COLOR_GOLD, width=1.2, dash='dot')
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index, y=df['MMR_Osc'], mode='lines', name='MMR (Macro)',
+        line=dict(color=COLOR_CYAN, width=1.2, dash='dot')
+    ))
     buys = df[df['Buy_Signal']]
     if not buys.empty:
-        fig.add_trace(go.Scatter(x=buys.index, y=buys['Unified_Osc'], mode='markers', name='Buy Signal', marker=dict(symbol='circle', color='#10b981', size=14, line=dict(color='white', width=2))))
+        fig.add_trace(go.Scatter(
+            x=buys.index, y=buys['Unified_Osc'], mode='markers', name='Buy Signal',
+            marker=dict(size=6, color=COLOR_GREEN)
+        ))
     sells = df[df['Sell_Signal']]
     if not sells.empty:
-        fig.add_trace(go.Scatter(x=sells.index, y=sells['Unified_Osc'], mode='markers', name='Sell Signal', marker=dict(symbol='circle', color='#ef4444', size=14, line=dict(color='white', width=2))))
-    
-    fig.add_hline(y=5, line=dict(color='rgba(239,68,68,0.5)', width=1, dash='dash'))
-    fig.add_hline(y=-5, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
-    fig.add_hline(y=0, line=dict(color='rgba(255,255,255,0.2)', width=1))
-    fig.add_hrect(y0=5, y1=10, fillcolor='rgba(239,68,68,0.08)', line_width=0)
-    fig.add_hrect(y0=-10, y1=-5, fillcolor='rgba(16,185,129,0.08)', line_width=0)
-    
-    fig.update_layout(
-        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=320,
-        margin=dict(l=10, r=10, t=10, b=50),
-        xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-        yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', range=[-12, 12], tickvals=[-10, -5, 0, 5, 10], side='right'),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)', font=dict(size=10, color='#888888')),
-        font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-    )
+        fig.add_trace(go.Scatter(
+            x=sells.index, y=sells['Unified_Osc'], mode='markers', name='Sell Signal',
+            marker=dict(size=6, color=COLOR_RED)
+        ))
+    fig.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM))
+    style_axes(fig, y_title="Oscillator", y_range=[-10, 10])
     return fig
 
 
 def create_gauge_chart(value):
-    color = '#10b981' if value < -5 else '#ef4444' if value > 5 else '#888888'
+    """Gauge indicator for signal strength (-10 to +10) with color zones."""
+    color = COLOR_GREEN if value < -5 else COLOR_RED if value > 5 else COLOR_MUTED
     fig = go.Figure(go.Indicator(
         mode="gauge+number", value=value,
-        number=dict(font=dict(size=32, color=color, family='Inter'), suffix=""),
+        number=dict(font=dict(size=32, color=color, family='JetBrains Mono'), suffix=""),
         gauge=dict(
-            axis=dict(range=[-10, 10], tickwidth=1, tickcolor='#3A3A3A', tickvals=[-10, -5, 0, 5, 10], tickfont=dict(size=10, color='#888888')),
-            bar=dict(color=color, thickness=0.3), bgcolor='#1A1A1A', borderwidth=2, bordercolor='#2A2A2A',
-            steps=[dict(range=[-10, -5], color='rgba(16,185,129,0.15)'), dict(range=[-5, 5], color='rgba(136,136,136,0.1)'), dict(range=[5, 10], color='rgba(239,68,68,0.15)')],
-            threshold=dict(line=dict(color='white', width=2), thickness=0.8, value=value)
+            axis=dict(range=[-10, 10], tickwidth=1, tickcolor='rgba(255,255,255,0.08)', tickvals=[-10, -5, 0, 5, 10], tickfont=dict(size=10, color='#64748B')),
+            bar=dict(color=color, thickness=0.3), bgcolor='rgba(0,0,0,0)', borderwidth=1, bordercolor='rgba(255,255,255,0.08)',
+            steps=[dict(range=[-10, -5], color='rgba(52,211,153,0.08)'), dict(range=[-5, 5], color='rgba(255,255,255,0.03)'), dict(range=[5, 10], color='rgba(251,113,133,0.08)')],
+            threshold=dict(line=dict(color='white', width=1), thickness=0.8, value=value)
         )
     ))
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=200, margin=dict(l=20, r=20, t=30, b=20), font=dict(family='Inter', color='#EAEAEA'))
+    fig.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False))
     return fig
 
 
 def create_heatmap_chart(results_df):
+    """Grid heatmap of signal strengths across screener universe."""
     symbols = results_df['DisplayName'].tolist()
     scores = results_df['Signal'].tolist()
     n_cols = 6
@@ -1358,44 +969,45 @@ def create_heatmap_chart(results_df):
         scores.append(0)
     symbols_grid = np.array(symbols).reshape(n_rows, n_cols)
     scores_grid = np.array(scores).reshape(n_rows, n_cols)
-    colorscale = [[0, '#10b981'], [0.25, '#059669'], [0.5, '#1A1A1A'], [0.75, '#dc2626'], [1, '#ef4444']]
+    colorscale = [[0, COLOR_GREEN], [0.25, 'rgba(52,211,153,0.6)'], [0.5, 'rgba(255,255,255,0.1)'], [0.75, 'rgba(251,113,133,0.6)'], [1, COLOR_RED]]
     normalized_scores = (scores_grid + 10) / 20
-    
+
     fig = go.Figure(data=go.Heatmap(
         z=normalized_scores,
         text=[[f"{s}<br>{v:.1f}" if s else "" for s, v in zip(row_s, row_v)] for row_s, row_v in zip(symbols_grid, scores_grid)],
-        texttemplate="%{text}", textfont=dict(size=11, color='white', family='Inter'),
+        texttemplate="%{text}", textfont=dict(size=11, color='#F1F5F9', family='JetBrains Mono'),
         colorscale=colorscale, showscale=False, hovertemplate="<b>%{text}</b><extra></extra>", xgap=3, ygap=3
     ))
     fig.update_layout(
-        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=300,
+        **chart_layout(height=UI_CHART_HEIGHT_MEDIUM, show_legend=False),
         margin=dict(l=0, r=0, t=10, b=10),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, autorange='reversed'),
-        font=dict(family='Inter')
     )
     return fig
 
 
 def create_distribution_chart(results_df):
+    """Histogram of Signal values across the universe."""
     fig = go.Figure()
-    fig.add_trace(go.Histogram(x=results_df['Signal'], nbinsx=20, marker=dict(color='#FFC300', line=dict(color='#2A2A2A', width=1)), opacity=0.8))
-    fig.add_vline(x=-5, line=dict(color='#10b981', width=2, dash='dash'))
-    fig.add_vline(x=5, line=dict(color='#ef4444', width=2, dash='dash'))
-    fig.add_vline(x=0, line=dict(color='#888888', width=1))
-    fig.add_vrect(x0=-10, x1=-5, fillcolor='rgba(16,185,129,0.1)', line_width=0)
-    fig.add_vrect(x0=5, x1=10, fillcolor='rgba(239,68,68,0.1)', line_width=0)
-    fig.update_layout(
-        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=200,
-        margin=dict(l=0, r=0, t=10, b=30),
-        xaxis=dict(title=dict(text='Signal Value', font=dict(size=10, color='#888888')), showgrid=True, gridcolor='rgba(42,42,42,0.5)', range=[-12, 12]),
-        yaxis=dict(title=dict(text='Count', font=dict(size=10, color='#888888')), showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-        font=dict(family='Inter', color='#EAEAEA'), bargap=0.1
-    )
+    fig.add_trace(go.Histogram(
+        x=results_df['Signal'], nbinsx=25,
+        marker=dict(color=COLOR_GOLD, line=dict(color='rgba(255,255,255,0.05)', width=0.5)),
+        opacity=0.8
+    ))
+    fig.add_vline(x=-5, line=dict(color=COLOR_GREEN, width=1.5, dash='dot'))
+    fig.add_vline(x=5, line=dict(color=COLOR_RED, width=1.5, dash='dot'))
+    fig.add_vline(x=0, line=dict(color='rgba(255,255,255,0.1)', width=1))
+    fig.add_vrect(x0=-10, x1=-5, fillcolor='rgba(52,211,153,0.04)', line_width=0)
+    fig.add_vrect(x0=5, x1=10, fillcolor='rgba(251,113,133,0.04)', line_width=0)
+
+    fig.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL), bargap=0.1)
+    style_axes(fig, x_title="Signal Strength", y_title="Count", y_range=[0, None])
     return fig
 
 
 def create_sector_radar(results_df):
+    """Polar radar chart aggregating signals by market sector."""
     sectors = {
         'Index': ['SENSEX', 'NIFTY 50', 'NIFTY 100', 'NIFTY 500', 'Top 50', 'Midcap', 'Smallcap'],
         'Banking': ['Banking', 'Pvt Bank', 'PSU Bank', 'Financial', 'Insurance'],
@@ -1408,71 +1020,71 @@ def create_sector_radar(results_df):
     for sector, symbols in sectors.items():
         matching = results_df[results_df['DisplayName'].isin(symbols)]
         sector_scores[sector] = matching['Signal'].mean() if not matching.empty else 0
-    
+
     categories = list(sector_scores.keys())
     values = list(sector_scores.values())
     categories.append(categories[0])
     values.append(values[0])
-    
+
     fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(r=values, theta=categories, fill='toself', fillcolor='rgba(255,195,0,0.2)', line=dict(color='#FFC300', width=2), marker=dict(size=8, color='#FFC300')))
+    fig.add_trace(go.Scatterpolar(
+        r=values, theta=categories, fill='toself', fillcolor='rgba(212,168,83,0.12)',
+        line=dict(color=COLOR_GOLD, width=2), marker=dict(size=8, color=COLOR_GOLD)
+    ))
     fig.update_layout(
+        **chart_layout(height=UI_CHART_HEIGHT_LARGE, show_legend=False),
         polar=dict(
-            radialaxis=dict(visible=True, range=[-10, 10], tickvals=[-10, -5, 0, 5, 10], gridcolor='rgba(42,42,42,0.5)', linecolor='rgba(42,42,42,0.5)', tickfont=dict(size=9, color='#888888')),
-            angularaxis=dict(gridcolor='rgba(42,42,42,0.5)', linecolor='rgba(42,42,42,0.5)', tickfont=dict(size=10, color='#EAEAEA')),
-            bgcolor='#1A1A1A'
+            radialaxis=dict(visible=True, range=[-10, 10], tickvals=[-10, -5, 0, 5, 10], gridcolor='rgba(255,255,255,0.05)', linecolor='rgba(255,255,255,0.05)', tickfont=dict(size=9, color='#64748B')),
+            angularaxis=dict(gridcolor='rgba(255,255,255,0.05)', linecolor='rgba(255,255,255,0.05)', tickfont=dict(size=10, color='#94A3B8')),
+            bgcolor='rgba(0,0,0,0)'
         ),
-        paper_bgcolor='rgba(0,0,0,0)', height=350, margin=dict(l=60, r=60, t=30, b=30), font=dict(family='Inter', color='#EAEAEA'), showlegend=False
+        margin=dict(l=60, r=60, t=30, b=30),
     )
     return fig
 
 
 def create_scatter_matrix(results_df):
+    """Scatter plot of MSF vs MMR with quadrant zones (buy/sell/neutral)."""
     fig = go.Figure()
-    colors = results_df['Zone'].map({'Oversold': '#10b981', 'Overbought': '#ef4444', 'Neutral': '#888888'})
+    colors = results_df['Zone'].map({'Oversold': COLOR_GREEN, 'Overbought': COLOR_RED, 'Neutral': COLOR_MUTED})
     fig.add_trace(go.Scatter(
-        x=results_df['MSF'], y=results_df['MMR'], mode='markers+text',
-        marker=dict(size=12, color=colors, line=dict(color='#2A2A2A', width=1), opacity=0.8),
-        text=results_df['DisplayName'], textposition='top center', textfont=dict(size=8, color='#888888'),
-        hovertemplate="<b>%{text}</b><br>MSF: %{x:.2f}<br>MMR: %{y:.2f}<extra></extra>"
+        x=results_df['MSF'], y=results_df['MMR'], mode='markers',
+        marker=dict(size=10, color=colors, line=dict(color='rgba(255,255,255,0.05)', width=0.5), opacity=0.85),
+        text=results_df['DisplayName'], hovertemplate="<b>%{text}</b><br>MSF: %{x:.2f}<br>MMR: %{y:.2f}<extra></extra>"
     ))
-    fig.add_hline(y=0, line=dict(color='rgba(255,195,0,0.3)', width=1, dash='dash'))
-    fig.add_vline(x=0, line=dict(color='rgba(255,195,0,0.3)', width=1, dash='dash'))
-    fig.add_annotation(x=6, y=6, text="SELL ZONE", font=dict(size=10, color='rgba(239,68,68,0.5)'), showarrow=False)
-    fig.add_annotation(x=-6, y=-6, text="BUY ZONE", font=dict(size=10, color='rgba(16,185,129,0.5)'), showarrow=False)
-    fig.update_layout(
-        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
-        margin=dict(l=40, r=10, t=30, b=40),
-        xaxis=dict(title=dict(text='MSF (Internal)', font=dict(size=11, color='#888888')), showgrid=True, gridcolor='rgba(42,42,42,0.5)', range=[-12, 12], zeroline=False),
-        yaxis=dict(title=dict(text='MMR (Macro)', font=dict(size=11, color='#888888')), showgrid=True, gridcolor='rgba(42,42,42,0.5)', range=[-12, 12], zeroline=False),
-        font=dict(family='Inter', color='#EAEAEA')
-    )
+    fig.add_hline(y=0, line=dict(color=COLOR_GOLD, width=0.5, dash='dot'))
+    fig.add_vline(x=0, line=dict(color=COLOR_GOLD, width=0.5, dash='dot'))
+
+    fig.add_annotation(x=8, y=8, text="SELL", font=dict(size=9, color='rgba(251,113,133,0.4)', family='JetBrains Mono'), showarrow=False)
+    fig.add_annotation(x=-8, y=-8, text="BUY", font=dict(size=9, color='rgba(52,211,153,0.4)', family='JetBrains Mono'), showarrow=False)
+
+    fig.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+    style_axes(fig, x_title="Internal Momentum (MSF)", y_title="Macro Regression (MMR)", y_range=[-12, 12])
     return fig
 
 
 def create_ranking_chart(results_df, top_n=10):
+    """Horizontal bar chart of top buy (green) and top sell (red) signals."""
     sorted_df = results_df.sort_values('Signal')
     bottom = sorted_df.head(top_n//2)
     top = sorted_df.tail(top_n//2)
     combined = pd.concat([bottom, top])
-    colors = ['#10b981' if v < 0 else '#ef4444' for v in combined['Signal']]
-    
+    colors = [COLOR_GREEN if v < 0 else COLOR_RED for v in combined['Signal']]
+
     fig = go.Figure()
     fig.add_trace(go.Bar(
         y=combined['DisplayName'], x=combined['Signal'], orientation='h',
-        marker=dict(color=colors, line=dict(color='#2A2A2A', width=1)),
-        text=[f"{v:.1f}" for v in combined['Signal']], textposition='outside', textfont=dict(size=10, color='#888888')
+        marker=dict(color=colors, line=dict(color='rgba(255,255,255,0.05)', width=0.5)),
+        text=[f"{v:.1f}" for v in combined['Signal']], textposition='outside',
+        textfont=dict(size=9, color='#64748B', family='JetBrains Mono')
     ))
-    fig.add_vline(x=0, line=dict(color='#FFC300', width=1))
-    fig.add_vline(x=-5, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
-    fig.add_vline(x=5, line=dict(color='rgba(239,68,68,0.5)', width=1, dash='dash'))
-    fig.update_layout(
-        template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
-        margin=dict(l=80, r=50, t=10, b=10),
-        xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', range=[-12, 12], tickvals=[-10, -5, 0, 5, 10]),
-        yaxis=dict(showgrid=False, tickfont=dict(size=10)),
-        font=dict(family='Inter', color='#EAEAEA')
-    )
+    fig.add_vline(x=0, line=dict(color=COLOR_GOLD, width=0.5))
+    fig.add_vline(x=-5, line=dict(color=COLOR_GREEN, width=1, dash='dot'))
+    fig.add_vline(x=5, line=dict(color=COLOR_RED, width=1, dash='dot'))
+
+    fig.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+    style_axes(fig, x_title="Signal Score", y_range=[None, None])
+    fig.update_yaxes(showgrid=False)
     return fig
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1480,25 +1092,27 @@ def create_ranking_chart(results_df, top_n=10):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def render_header():
-    st.markdown("""
-    <div class="premium-header">
-        <h1>NIRNAY : Unified Market Analysis</h1>
-        <div class="tagline">Quantitative Signal + Regime Intelligence System</div>
-    </div>
-    """, unsafe_allow_html=True)
+    """Render the main masthead header (matches Pragyam design)."""
+    comps.render_header("NIRNAY", "Quantitative Signal + Regime Intelligence System")
 
 
 def render_sidebar():
+    """Render navigation sidebar with mode selection, parameters, and run button."""
     with st.sidebar:
-        st.markdown("""
-        <div style="text-align: center; padding: 1rem 0; margin-bottom: 1rem;">
-            <div style="font-size: 1.75rem; font-weight: 800; color: #FFC300;">NIRNAY</div>
-            <div style="color: #888888; font-size: 0.75rem; margin-top: 0.25rem;">निर्णय | Decision Intelligence</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div style="text-align:center;padding:0.75rem 0 1rem 0;">
+                <div style="font-family:var(--display);font-size:1.5rem;font-weight:700;color:var(--amber);letter-spacing:0.06em;">NIRNAY</div>
+                <div style="font-family:var(--data);color:var(--ink-tertiary);font-size:0.65rem;margin-top:0.2rem;letter-spacing:0.08em;text-transform:uppercase;">निर्णय | Market Intelligence</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        mode = st.radio("Analysis Mode", ["🏠 Home", "🏦 ETF Screener", "📊 Market Screener", "📈 Chart Analysis"], label_visibility="collapsed")
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="sidebar-title">Navigation</div>', unsafe_allow_html=True)
+        mode = st.radio("Analysis Mode", ["Home", "ETF Screener", "Market Screener"], label_visibility="collapsed")
+        st.markdown("<br>", unsafe_allow_html=True)
         
         # ETF Screener specific options (fixed ETF universe)
         etf_mode = None
@@ -1507,16 +1121,16 @@ def render_sidebar():
         etf_end_date = None
         
         if "ETF" in mode:
-            st.markdown('<div class="sidebar-title">📊 Analysis Type</div>', unsafe_allow_html=True)
+            st.markdown('<div class="sidebar-title">Analysis Type</div>', unsafe_allow_html=True)
             etf_mode = st.radio(
                 "Select ETF Mode",
-                ["📅 Single Day", "📈 Time Series"],
+                ["Single Day", "Time Series"],
                 label_visibility="collapsed",
                 help="Single Day: Analyze one date | Time Series: Track signals over a date range"
             )
             
             if "Single" in etf_mode:
-                st.markdown('<div class="sidebar-title">📅 Analysis Date</div>', unsafe_allow_html=True)
+                st.markdown('<div class="sidebar-title">Analysis Date</div>', unsafe_allow_html=True)
                 etf_date = st.date_input(
                     "ETF Analysis Date",
                     datetime.date.today(),
@@ -1524,7 +1138,7 @@ def render_sidebar():
                     help="Select the date for signal analysis (defaults to today)"
                 )
             else:
-                st.markdown('<div class="sidebar-title">📅 Date Range</div>', unsafe_allow_html=True)
+                st.markdown('<div class="sidebar-title">Date Range</div>', unsafe_allow_html=True)
                 col_e1, col_e2 = st.columns(2)
                 with col_e1:
                     etf_start_date = st.date_input(
@@ -1540,7 +1154,7 @@ def render_sidebar():
                         max_value=datetime.date.today(),
                         help="End of analysis period"
                     )
-            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
         
         # Market Screener specific options (F&O / Index universe)
         spread_universe = None
@@ -1551,10 +1165,10 @@ def render_sidebar():
         spread_end_date = None
         
         if "Market" in mode:
-            st.markdown('<div class="sidebar-title">🎯 Universe Selection</div>', unsafe_allow_html=True)
+            st.markdown('<div class="sidebar-title">Universe Selection</div>', unsafe_allow_html=True)
             spread_universe = st.selectbox(
                 "Analysis Universe",
-                ANALYSIS_UNIVERSE_OPTIONS,
+                MARKET_UNIVERSE_OPTIONS,
                 help="Choose India/US index constituents, Commodities, or Currency pairs"
             )
             if spread_universe == "India Indexes":
@@ -1571,16 +1185,16 @@ def render_sidebar():
                     help="Select the US index for constituent analysis"
                 )
             
-            st.markdown('<div class="sidebar-title">📊 Analysis Type</div>', unsafe_allow_html=True)
+            st.markdown('<div class="sidebar-title">Analysis Type</div>', unsafe_allow_html=True)
             spread_mode = st.radio(
                 "Select Mode",
-                ["📅 Single Day", "📈 Time Series"],
+                ["Single Day", "Time Series"],
                 label_visibility="collapsed",
                 help="Single Day: Analyze one date | Time Series: Track signals over a date range"
             )
             
             if "Single" in spread_mode:
-                st.markdown('<div class="sidebar-title">📅 Analysis Date</div>', unsafe_allow_html=True)
+                st.markdown('<div class="sidebar-title">Analysis Date</div>', unsafe_allow_html=True)
                 spread_date = st.date_input(
                     "Select Date",
                     datetime.date.today(),
@@ -1588,7 +1202,7 @@ def render_sidebar():
                     help="Select the date for signal analysis (defaults to today)"
                 )
             else:
-                st.markdown('<div class="sidebar-title">📅 Date Range</div>', unsafe_allow_html=True)
+                st.markdown('<div class="sidebar-title">Date Range</div>', unsafe_allow_html=True)
                 col_d1, col_d2 = st.columns(2)
                 with col_d1:
                     spread_start_date = st.date_input(
@@ -1606,401 +1220,170 @@ def render_sidebar():
                     )
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        st.markdown('<div class="sidebar-title">⚙️ Parameters</div>', unsafe_allow_html=True)
-        with st.expander("Indicator Settings", expanded=False):
-            length = st.slider("Lookback Period", 10, 50, 20)
-            roc_len = st.slider("ROC Length", 5, 30, 14)
-            regime_sensitivity = st.slider("Regime Sensitivity", 0.5, 3.0, 1.5, 0.1)
-            base_weight = st.slider("Base MSF Weight", 0.0, 1.0, 0.5, 0.05)
+
+        # Dynamic action button based on mode selection
+        run_clicked = False
+        button_text = "SELECT MODE"
+        button_disabled = True
+
+        if mode == "Home":
+            button_text = "HOME"
+            button_disabled = True
+        elif "ETF" in mode:
+            if etf_mode and "Single" in etf_mode:
+                button_text = "RUN ETF SCREENER"
+                button_disabled = False
+            elif etf_mode and "Time Series" in etf_mode:
+                button_text = "RUN ETF TIME SERIES"
+                button_disabled = False
+        elif "Market" in mode:
+            if spread_mode and "Single" in spread_mode:
+                button_text = "RUN MARKET SCREENER"
+                button_disabled = False
+            elif spread_mode and "Time Series" in spread_mode:
+                button_text = "RUN MARKET TIME SERIES"
+                button_disabled = False
+
+        run_clicked = st.button(button_text, type="primary", use_container_width=True, disabled=button_disabled, key="sidebar_run_btn")
+
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown(f"""
-        <div class='info-box'>
-            <p style='font-size: 0.8rem; margin: 0; color: var(--text-muted); line-height: 1.5;'>
-                <strong>Version:</strong> {VERSION}<br>
-                <strong>Engine:</strong> MSF + MMR + HMM<br>
-                <strong>Data:</strong> Live Market Feed
-            </p>
+        <div class="system-spec">
+            <div class="spec-row"><span class="spec-label">Version</span><span class="spec-value">{VERSION}</span></div>
+            <div class="spec-row"><span class="spec-label">Engine</span><span class="spec-value">MSF + MMR + HMM</span></div>
+            <div class="spec-row"><span class="spec-label">Data</span><span class="spec-value">Live Market Feed</span></div>
         </div>
         """, unsafe_allow_html=True)
-        return mode, length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, spread_mode, spread_start_date, spread_end_date, etf_mode, etf_date, etf_start_date, etf_end_date
+
+        # Default indicator parameters (no longer user-configurable)
+        length = 20
+        roc_len = 14
+        regime_sensitivity = 1.5
+        base_weight = 0.5
+
+        return mode, length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, spread_mode, spread_start_date, spread_end_date, etf_mode, etf_date, etf_start_date, etf_end_date, run_clicked
 
 
 def run_home_page():
-    """Landing page with overview and quick navigation"""
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Feature cards
-    col1, col2, col3 = st.columns(3)
-    
+    """Render landing page with system overview — exact Pragyam design adapted for Nirnay."""
+    comps.section_gap()
+
+    col1, col2, col3 = st.columns(3, gap="small")
+
     with col1:
         st.markdown("""
-        <div class='metric-card primary' style='min-height: 280px;'>
-            <h3 style='color: var(--primary-color); margin-bottom: 1rem;'>🏦 ETF Screener</h3>
-            <p style='color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;'>
-                Full MSF + MMR + Regime analysis across a curated universe of 30 ETFs covering major indices and sectors.
-            </p>
-            <br>
-            <p style='color: var(--text-secondary); font-size: 0.85rem;'>
-                <strong>Features:</strong><br>
-                • Single Day Analysis<br>
-                • Time Series Tracking<br>
-                • Macro Correlation (MMR)<br>
-                • HMM Regime Detection
-            </p>
+        <div class='system-card portfolio'>
+            <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                SIGNALS
+            </h3>
+            <p>Internal Market Structure & Flow analysis with momentum ROC dynamics, price microstructure decomposition, and institutional flow patterns.</p>
+            <div class='spec'>
+                <span>Engines:</span> MSF (Market Structure) + MMR (Macro Regression)<br>
+                <span>Indicators:</span> ROC · Z-Score · Efficiency Ratio<br>
+                <span>Signals:</span> Flow quality + Structural strength<br>
+                <span>Modes:</span> Single Day + Time Series analysis
+            </div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col2:
         st.markdown("""
-        <div class='metric-card success' style='min-height: 280px;'>
-            <h3 style='color: var(--success-green); margin-bottom: 1rem;'>📊 Market Screener</h3>
-            <p style='color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;'>
-                MSF-based signal analysis across F&O stocks or index constituents. Scan 200-500 stocks efficiently.
-            </p>
-            <br>
-            <p style='color: var(--text-secondary); font-size: 0.85rem;'>
-                <strong>Features:</strong><br>
-                • India Indexes (F&amp;O Stocks + 16 NIFTY indices)<br>
-                • US Indexes (S&amp;P 500, Dow Jones, NASDAQ 100)<br>
-                • Commodities (24 futures)<br>
-                • Currency (24 pairs)<br>
-                • Time Series Analysis
-            </p>
+        <div class='system-card regime'>
+            <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                REGIME
+            </h3>
+            <p>Adaptive market regime detection using Hidden Markov Models for state discovery, GARCH for volatility regime, and CUSUM for change points.</p>
+            <div class='spec'>
+                <span>Detection:</span> HMM state identification<br>
+                <span>Volatility:</span> GARCH regime classification<br>
+                <span>Change Points:</span> CUSUM anomaly detection<br>
+                <span>Sensitivity:</span> Configurable regime threshold
+            </div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col3:
         st.markdown("""
-        <div class='metric-card info' style='min-height: 280px;'>
-            <h3 style='color: var(--info-cyan); margin-bottom: 1rem;'>📈 Chart Analysis</h3>
-            <p style='color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;'>
-                Deep dive into individual securities with unified analysis including regime context and macro drivers.
-            </p>
-            <br>
-            <p style='color: var(--text-secondary); font-size: 0.85rem;'>
-                <strong>Features:</strong><br>
-                • Any NSE Symbol<br>
-                • Price & Oscillator Charts<br>
-                • HMM State Probabilities<br>
-                • CUSUM Change Detection
-            </p>
+        <div class='system-card strategies'>
+            <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                SCREENER
+            </h3>
+            <p>Global multi-instrument screener across ETF universe, equity indices, commodities, and currency markets with unified signal overlay.</p>
+            <div class='spec'>
+                <span>Coverage:</span> 30 ETFs · 17 Indices · 24 Commodities<br>
+                <span>Currencies:</span> 25 major FX pairs<br>
+                <span>Analysis:</span> Single symbol or universe-wide<br>
+                <span>Output:</span> Signal scores + regime state
+            </div>
         </div>
         """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Analysis methodology section
-    st.markdown("### 📐 Analysis Methodology")
-    
-    col_m1, col_m2, col_m3 = st.columns(3)
-    
-    with col_m1:
-        st.markdown("""
-        <div class='signal-card buy' style='padding: 1.5rem;'>
-            <h4 style='color: var(--success-green); margin-bottom: 1rem;'>MSF - Market Structure & Flow</h4>
-            <p style='color: var(--text-muted); font-size: 0.85rem; line-height: 1.7;'>
-                Internal price-based indicator:
-            </p>
-            <ul style='color: var(--text-secondary); font-size: 0.85rem; line-height: 1.8; margin-top: 0.5rem;'>
-                <li><strong>Momentum</strong> - ROC dynamics</li>
-                <li><strong>Microstructure</strong> - Efficiency</li>
-                <li><strong>Flow</strong> - Volume-weighted</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_m2:
-        st.markdown("""
-        <div class='signal-card sell' style='padding: 1.5rem;'>
-            <h4 style='color: var(--danger-red); margin-bottom: 1rem;'>MMR - Macro Regression</h4>
-            <p style='color: var(--text-muted); font-size: 0.85rem; line-height: 1.7;'>
-                External macro correlation:
-            </p>
-            <ul style='color: var(--text-secondary); font-size: 0.85rem; line-height: 1.8; margin-top: 0.5rem;'>
-                <li><strong>Bonds</strong> - US/IN 10Y yields</li>
-                <li><strong>Currencies</strong> - DXY, INR</li>
-                <li><strong>Commodities</strong> - Gold, Crude</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_m3:
-        st.markdown("""
-        <div class='metric-card info' style='padding: 1.5rem;'>
-            <h4 style='color: var(--info-cyan); margin-bottom: 1rem;'>Regime Intelligence</h4>
-            <p style='color: var(--text-muted); font-size: 0.85rem; line-height: 1.7;'>
-                Adaptive state detection:
-            </p>
-            <ul style='color: var(--text-secondary); font-size: 0.85rem; line-height: 1.8; margin-top: 0.5rem;'>
-                <li><strong>HMM</strong> - State discovery</li>
-                <li><strong>GARCH</strong> - Volatility regime</li>
-                <li><strong>CUSUM</strong> - Change points</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Signal interpretation
-    st.markdown("### 🎯 Signal Interpretation")
-    
-    col_s1, col_s2, col_s3 = st.columns(3)
-    
-    with col_s1:
-        st.markdown("""
-        <div style='background: rgba(16, 185, 129, 0.1); border: 1px solid var(--success-green); border-radius: 12px; padding: 1.25rem;'>
-            <h4 style='color: var(--success-green); margin-bottom: 0.75rem;'>🟢 Oversold Zone</h4>
-            <p style='color: var(--text-muted); font-size: 0.85rem;'>Signal &lt; -5</p>
-            <p style='color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;'>
-                Potential buying opportunity. Look for confirmation with divergences and macro support.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_s2:
-        st.markdown("""
-        <div style='background: rgba(136, 136, 136, 0.1); border: 1px solid var(--neutral); border-radius: 12px; padding: 1.25rem;'>
-            <h4 style='color: var(--neutral); margin-bottom: 0.75rem;'>⚪ Neutral Zone</h4>
-            <p style='color: var(--text-muted); font-size: 0.85rem;'>Signal -5 to +5</p>
-            <p style='color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;'>
-                No clear directional bias. Wait for breakout or use other confluence factors.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col_s3:
-        st.markdown("""
-        <div style='background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger-red); border-radius: 12px; padding: 1.25rem;'>
-            <h4 style='color: var(--danger-red); margin-bottom: 0.75rem;'>🔴 Overbought Zone</h4>
-            <p style='color: var(--text-muted); font-size: 0.85rem;'>Signal &gt; +5</p>
-            <p style='color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;'>
-                Potential selling opportunity. Watch for bearish divergences and macro headwinds.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Quick stats
-    st.markdown("### 📊 System Coverage")
-    
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.markdown(f'<div class="metric-card neutral"><h4>ETF Universe</h4><h2>{len(SCREENER_SYMBOLS)}</h2><div class="sub-metric">Curated ETFs</div></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="metric-card neutral"><h4>Index Options</h4><h2>{len(INDIA_INDEX_LIST) + len(US_INDEX_LIST)}</h2><div class="sub-metric">India + US Indices</div></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="metric-card neutral"><h4>Commodities</h4><h2>{len(COMMODITY_TICKERS)}</h2><div class="sub-metric">Futures Contracts</div></div>', unsafe_allow_html=True)
-    with c4:
-        st.markdown(f'<div class="metric-card neutral"><h4>Currency</h4><h2>{len(CURRENCY_TICKERS)}</h2><div class="sub-metric">FX Pairs</div></div>', unsafe_allow_html=True)
-    with c5:
-        st.markdown(f'<div class="metric-card neutral"><h4>Universes</h4><h2>{len(ANALYSIS_UNIVERSE_OPTIONS)}</h2><div class="sub-metric">Analysis Scopes</div></div>', unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Getting started
+
+    comps.section_gap()
+
     st.markdown("""
-    <div class='info-box'>
-        <h4>🚀 Getting Started</h4>
-        <p style='color: var(--text-muted); line-height: 1.7;'>
-            Select an analysis mode from the sidebar to begin. Each mode offers both <strong>Single Day</strong> analysis 
-            for current signals and <strong>Time Series</strong> analysis for tracking signal evolution over time.
-            Adjust indicator parameters in the sidebar's <em>Indicator Settings</em> expander for fine-tuning.
-        </p>
+    <div class='landing-prompt'>
+        <h4>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+            SELECT ANALYSIS MODE
+        </h4>
+        <p>Choose from the <strong>Sidebar</strong>: <strong>ETF Screener</strong> (curated universe) or
+           <strong>Market Screener</strong> (equity indices · commodities · currencies).<br>
+           Select <strong>Single Day</strong> for current signals or <strong>Time Series</strong> to track evolution over time.<br>
+           <span style="color:var(--ink-secondary); font-size:0.85em; margin-top:0.5rem; display:inline-block;">System will decompose price structure · Detect market regime · Score signal strength</span></p>
     </div>
     """, unsafe_allow_html=True)
 
 
 def main():
-    mode, length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, spread_mode, spread_start_date, spread_end_date, etf_mode, etf_date, etf_start_date, etf_end_date = render_sidebar()
+    """Main application entry point: render header, sidebar, and delegate to selected mode."""
+    mode, length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, spread_mode, spread_start_date, spread_end_date, etf_mode, etf_date, etf_start_date, etf_end_date, run_clicked = render_sidebar()
     
     # Only show main header on Home page
     if "Home" in mode:
-        render_header()
+        comps.render_header("NIRNAY", "Quantitative Signal + Regime Intelligence System")
     
     if "Home" in mode:
         run_home_page()
     elif "ETF" in mode:
         # ETF Screener (fixed ETF universe)
         if etf_mode and "Time Series" in etf_mode:
-            run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, etf_start_date, etf_end_date)
+            run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, etf_start_date, etf_end_date, run_clicked)
         else:
-            run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, etf_date)
+            run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, etf_date, run_clicked)
     elif "Market" in mode:
         # Market Screener (F&O / Index universe)
         if spread_mode and "Time Series" in spread_mode:
-            run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_start_date, spread_end_date)
+            run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_start_date, spread_end_date, run_clicked)
         else:
-            run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date)
-    elif "Chart" in mode:
-        run_chart_mode(length, roc_len, regime_sensitivity, base_weight)
-    
+            run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, run_clicked)
+
     # Dynamic footer with current IST time
     utc_now = datetime.datetime.now(datetime.timezone.utc)
     ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
     current_time_ist = ist_now.strftime("%Y-%m-%d %H:%M:%S IST")
     
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.caption(f"© 2026 {PRODUCT_NAME} | {COMPANY} | {VERSION} | {current_time_ist}")
-
-
-def run_chart_mode(length, roc_len, regime_sensitivity, base_weight):
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        target_symbol = st.text_input("Symbol", value="SPY", placeholder="Enter ticker (e.g., SPY, AAPL, NIFTYIETF.NS)", label_visibility="collapsed")
-    with col2:
-        analyze_btn = st.button("◈ ANALYZE", type="primary", width="stretch")
+    utc_now = datetime.datetime.now(datetime.timezone.utc)
+    ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
+    current_time_ist = ist_now.strftime("%Y-%m-%d %H:%M:%S IST")
     
-    if analyze_btn and target_symbol:
-        with st.spinner(""):
-            st.toast("Fetching market data...", icon="⏳")
-            macro_df = fetch_macro_data(days_back=100)
-            df = fetch_ticker_data(target_symbol, macro_df, days_back=100)
-            
-            if df is not None and not df.empty:
-                try:
-                    df, drivers = run_full_analysis(df, length, roc_len, regime_sensitivity, base_weight)
-                    display_df = df.iloc[-100:].copy()
-                    
-                    curr_unified = display_df['Unified_Osc'].iloc[-1]
-                    curr_msf = display_df['MSF_Osc'].iloc[-1]
-                    curr_mmr = display_df['MMR_Osc'].iloc[-1]
-                    curr_condition = display_df['Condition'].iloc[-1]
-                    curr_price = display_df['Close'].iloc[-1]
-                    prev_price = display_df['Close'].iloc[-2]
-                    price_change = ((curr_price - prev_price) / prev_price) * 100
-                    has_buy = display_df['Buy_Signal'].iloc[-1]
-                    has_sell = display_df['Sell_Signal'].iloc[-1]
-                    
-                    # NEW: Get regime intelligence data
-                    curr_regime = display_df['Regime'].iloc[-1]
-                    curr_hmm_bull = display_df['HMM_Bull'].iloc[-1]
-                    curr_hmm_bear = display_df['HMM_Bear'].iloc[-1]
-                    curr_vol_regime = display_df['Vol_Regime'].iloc[-1]
-                    curr_change_point = display_df['Change_Point'].iloc[-1]
-                    curr_confidence = display_df['Confidence'].iloc[-1]
-                    
-                    st.toast("Analysis Complete!", icon="✅")
-                    
-                    # Row 1: Signal metrics
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        color_class = "success" if curr_condition == "Oversold" else "danger" if curr_condition == "Overbought" else "neutral"
-                        st.markdown(f'<div class="metric-card {color_class}"><h4>Unified Signal</h4><h2>{curr_unified:.2f}</h2><div class="sub-metric">{curr_condition}</div></div>', unsafe_allow_html=True)
-                    with col2:
-                        st.markdown(f'<div class="metric-card primary"><h4>MSF (Internal)</h4><h2>{curr_msf:.2f}</h2><div class="sub-metric">Structure & Flow</div></div>', unsafe_allow_html=True)
-                    with col3:
-                        st.markdown(f'<div class="metric-card info"><h4>MMR (Macro)</h4><h2>{curr_mmr:.2f}</h2><div class="sub-metric">Macro Regression</div></div>', unsafe_allow_html=True)
-                    with col4:
-                        price_color = "success" if price_change >= 0 else "danger"
-                        st.markdown(f'<div class="metric-card {price_color}"><h4>Price</h4><h2>₹{curr_price:,.2f}</h2><div class="sub-metric">{"▲" if price_change >= 0 else "▼"} {abs(price_change):.2f}%</div></div>', unsafe_allow_html=True)
-                    
-                    # Row 2: Regime Intelligence metrics (NEW)
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        regime_color = "success" if "BULL" in curr_regime else "danger" if "BEAR" in curr_regime else "warning" if curr_regime == "TRANSITION" else "neutral"
-                        st.markdown(f'<div class="metric-card {regime_color}"><h4>HMM Regime</h4><h2 style="font-size: 1.3rem;">{curr_regime}</h2><div class="sub-metric">Confidence: {curr_confidence:.0%}</div></div>', unsafe_allow_html=True)
-                    with col2:
-                        vol_color = "danger" if curr_vol_regime in ["HIGH", "EXTREME"] else "success" if curr_vol_regime == "LOW" else "neutral"
-                        st.markdown(f'<div class="metric-card {vol_color}"><h4>Volatility Regime</h4><h2 style="font-size: 1.3rem;">{curr_vol_regime}</h2><div class="sub-metric">GARCH-based</div></div>', unsafe_allow_html=True)
-                    with col3:
-                        st.markdown(f'<div class="metric-card success"><h4>P(Bull)</h4><h2>{curr_hmm_bull:.0%}</h2><div class="sub-metric">HMM State</div></div>', unsafe_allow_html=True)
-                    with col4:
-                        st.markdown(f'<div class="metric-card danger"><h4>P(Bear)</h4><h2>{curr_hmm_bear:.0%}</h2><div class="sub-metric">HMM State</div></div>', unsafe_allow_html=True)
-                    
-                    # Change point alert (NEW)
-                    if curr_change_point:
-                        st.markdown('<span class="status-badge regime">⚠️ CHANGE POINT DETECTED - Regime Transition</span>', unsafe_allow_html=True)
-                    
-                    if has_buy or has_sell:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if has_buy:
-                            st.markdown('<span class="status-badge buy">◉ CONFIRMED BUY SIGNAL</span>', unsafe_allow_html=True)
-                        if has_sell:
-                            st.markdown('<span class="status-badge sell">◉ CONFIRMED SELL SIGNAL</span>', unsafe_allow_html=True)
-                    
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    tab3, tab1, tab2 = st.tabs(["**🎯 Regime Intelligence**", "**📈 Price & Oscillator**", "**📊 Signal Components**"])
-                    
-                    with tab3:
-                        # Regime Intelligence Tab (FIRST)
-                        st.markdown("##### HMM State Probabilities Over Time")
-                        
-                        # Create HMM probability chart
-                        fig_hmm = go.Figure()
-                        fig_hmm.add_trace(go.Scatter(x=display_df.index, y=display_df['HMM_Bull'], mode='lines', name='P(Bull)', line=dict(color='#10b981', width=2), fill='tozeroy', fillcolor='rgba(16,185,129,0.2)'))
-                        fig_hmm.add_trace(go.Scatter(x=display_df.index, y=display_df['HMM_Bear'], mode='lines', name='P(Bear)', line=dict(color='#ef4444', width=2), fill='tozeroy', fillcolor='rgba(239,68,68,0.2)'))
-                        fig_hmm.add_hline(y=0.5, line_dash='dash', line_color='#888888')
-                        fig_hmm.update_layout(template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=250, margin=dict(l=10, r=10, t=10, b=10), yaxis=dict(range=[0, 1], showgrid=True, gridcolor='#2A2A2A'), xaxis=dict(showgrid=True, gridcolor='#2A2A2A'), legend=dict(orientation='h', y=1.1), hovermode='x unified')
-                        st.plotly_chart(fig_hmm, width="stretch", config={'displayModeBar': False})
-                        
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.markdown("##### Regime Timeline")
-                            # Create regime color mapping
-                            regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
-                            regime_vals = display_df['Regime'].map(lambda x: regime_colors.get(x, '#888888'))
-                            
-                            # Count regimes
-                            regime_counts = display_df['Regime'].value_counts()
-                            fig_regime = go.Figure(go.Pie(
-                                labels=regime_counts.index, values=regime_counts.values, hole=0.5,
-                                marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
-                                textinfo='label+percent', textfont=dict(size=10, color='white')
-                            ))
-                            fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=250, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
-                            st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
-                        
-                        with c2:
-                            st.markdown("##### Volatility Regime Distribution")
-                            vol_counts = display_df['Vol_Regime'].value_counts()
-                            vol_colors = {'LOW': '#10b981', 'NORMAL': '#888888', 'HIGH': '#f59e0b', 'EXTREME': '#ef4444'}
-                            fig_vol = go.Figure(go.Pie(
-                                labels=vol_counts.index, values=vol_counts.values, hole=0.5,
-                                marker=dict(colors=[vol_colors.get(v, '#888888') for v in vol_counts.index], line=dict(color='#1A1A1A', width=2)),
-                                textinfo='label+percent', textfont=dict(size=10, color='white')
-                            ))
-                            fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=250, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
-                            st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
-                        
-                        # Change points
-                        change_points = display_df[display_df['Change_Point'] == True]
-                        if len(change_points) > 0:
-                            st.markdown(f"##### Change Points Detected: {len(change_points)}")
-                            st.dataframe(change_points[['Close', 'Unified_Osc', 'Regime', 'Vol_Regime']].tail(10), width="stretch")
-                        else:
-                            st.info("No change points detected in this period")
-                    
-                    with tab1:
-                        st.plotly_chart(create_price_chart(display_df, target_symbol), width="stretch", config={'displayModeBar': False})
-                        st.plotly_chart(create_oscillator_chart(display_df), width="stretch", config={'displayModeBar': False})
-                    
-                    with tab2:
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.markdown("##### Signal Gauge")
-                            st.plotly_chart(create_gauge_chart(curr_unified), width="stretch", config={'displayModeBar': False})
-                        with c2:
-                            st.markdown("##### Top Macro Drivers")
-                            if drivers:
-                                for d in sorted(drivers, key=lambda x: abs(x['Correlation']), reverse=True):
-                                    corr = d['Correlation']
-                                    color = '#10b981' if corr > 0 else '#ef4444'
-                                    pct = abs(corr) * 100
-                                    st.markdown(f'<div style="margin-bottom: 0.75rem;"><div style="display: flex; justify-content: space-between; font-size: 0.85rem;"><span style="color: #EAEAEA;">{d["Name"]}</span><span style="color: {color}; font-weight: 600;">{corr:+.3f}</span></div><div class="conviction-meter"><div class="conviction-fill" style="width: {pct}%; background: {color};"></div></div></div>', unsafe_allow_html=True)
-                            else:
-                                st.info("No macro correlations available")
-                        
-                except Exception as e:
-                    st.error(f"Analysis Error: {str(e)}")
-            else:
-                st.warning("No data found. Please verify the ticker symbol.")
+    st.markdown(
+        f'<div class="app-footer">'
+        f'<div class="content">'
+        f'&copy; {ist_now.year} <strong>{PRODUCT_NAME}</strong> &nbsp;&middot;&nbsp; {COMPANY} &nbsp;&middot;&nbsp; v{VERSION}'
+        f'<br>'
+        f'<span style="opacity:0.7;">{current_time_ist}</span>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 
-def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, analysis_date):
+
+def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, analysis_date, run_clicked):
     """ETF Screener: NIRNAY analysis on fixed ETF universe with date selection"""
     
     # Format analysis date
@@ -2008,37 +1391,96 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
         analysis_date = datetime.date.today()
     analysis_date_str = analysis_date.strftime("%d %b %Y")
     is_today = analysis_date == datetime.date.today()
-    
-    st.markdown(f"""
-    <div class='info-box'>
-        <h4>🏦 ETF Screener - Fixed Universe</h4>
-        <p>Full NIRNAY (MSF + MMR) analysis across {len(SCREENER_SYMBOLS)} ETFs.<br>
-        <strong>Analysis Date:</strong> {analysis_date_str} {"(Today)" if is_today else ""}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+
+    # Top spacing
+    comps.section_gap()
+    comps.section_gap()
+
+    comps.render_section_header(
+        "ETF Screener — Fixed Universe",
+        f"Full NIRNAY (MSF + MMR) analysis across {len(SCREENER_SYMBOLS)} ETFs · Analysis Date: {analysis_date_str} {'(Today)' if is_today else ''}",
+        icon="grid",
+        accent="cyan"
+    )
+
+    if not run_clicked:
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Analysis Overview Section
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            comps.render_metric_card("Universe", f"{len(SCREENER_SYMBOLS)}", "Curated ETFs", "info")
+        with col2:
+            comps.render_metric_card("Signal Engines", "2", "MSF + MMR", "cyan")
+        with col3:
+            comps.render_metric_card("Output Metrics", "8", "Signal + Regime + Zone", "warning")
+        with col4:
+            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+
+        comps.section_gap()
+        comps.section_gap()
+
+        # Analysis Framework Section
+        comps.render_section_header(
+            "Analysis Framework",
+            "Market Structure (MSF) + Macro Regression (MMR) + Regime Intelligence (HMM/GARCH/CUSUM)",
+            icon="layers",
+            accent="emerald"
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Internal price structure via momentum ROC, efficiency ratio, and microstructure decomposition.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_m2:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Macro correlation tracking bond yields, currencies, and commodity flows for regime shifts.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_m3:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    HMM state evolution, volatility regime distribution, and change point timeline.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
     st.markdown("<br>", unsafe_allow_html=True)
-    
+
     # Validate analysis date
     if analysis_date > datetime.date.today():
         st.error("⚠️ Analysis date cannot be in the future.")
         return
-    
-    if st.button("◈ RUN ETF SCREENER", type="primary"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        status_text.markdown("**⏳ Fetching global macro data...**")
-        
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    if run_clicked:
+        progress_slot = st.empty()
+
         # Fetch macro data with buffer for historical analysis
         days_back = 100 + (datetime.date.today() - analysis_date).days
+        theme.progress_bar(progress_slot, 5, "Initialization", "Fetching global macro data...")
         macro_df = fetch_macro_data(days_back=days_back)
-        
+
         results = []
         total = len(SCREENER_SYMBOLS)
-        
+
         for i, symbol in enumerate(SCREENER_SYMBOLS):
-            status_text.markdown(f"**⏳ Scanning {get_display_name(symbol)} ({i+1}/{total})**")
-            progress_bar.progress((i + 1) / total)
+            pct = int(5 + (95 * (i + 1) / total))
+            theme.progress_bar(progress_slot, pct, f"Scanning {get_display_name(symbol)}", f"{i+1}/{total} ETFs")
             df = fetch_ticker_data(symbol, macro_df, days_back=days_back)
             
             if df is not None and len(df) > length + 5:
@@ -2091,12 +1533,11 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                     })
                 except Exception:
                     pass
-        
-        progress_bar.empty()
-        status_text.empty()
-        
+
+        progress_slot.empty()
+
         if results:
-            st.toast(f"ETF Scan Complete! Analyzed {len(results)}/{total} ETFs", icon="✅")
+            st.toast(f"ETF Scan Complete! Analyzed {len(results)}/{total} ETFs")
             results_df = pd.DataFrame(results)
             
             # Calculate summary stats
@@ -2118,147 +1559,51 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             st.markdown("<br>", unsafe_allow_html=True)
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             with c1:
-                st.markdown(f'<div class="metric-card info"><h4>Universe</h4><h2>{len(results)}</h2><div class="sub-metric">ETFs Analyzed</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Universe", f"{len(results)}", "ETFs Analyzed", "info")
             with c2:
-                st.markdown(f'<div class="metric-card success"><h4>Oversold</h4><h2>{n_oversold}</h2><div class="sub-metric">Buy Zone</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Oversold", f"{n_oversold}", "Buy Zone", "success")
             with c3:
-                st.markdown(f'<div class="metric-card danger"><h4>Overbought</h4><h2>{n_overbought}</h2><div class="sub-metric">Sell Zone</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Overbought", f"{n_overbought}", "Sell Zone", "danger")
             with c4:
-                st.markdown(f'<div class="metric-card primary"><h4>Buy Signals</h4><h2>{n_buys}</h2><div class="sub-metric">Confirmed</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Buy Signals", f"{n_buys}", "Confirmed", "primary")
             with c5:
-                st.markdown(f'<div class="metric-card warning"><h4>Sell Signals</h4><h2>{n_sells}</h2><div class="sub-metric">Confirmed</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Sell Signals", f"{n_sells}", "Confirmed", "warning")
             with c6:
-                st.markdown(f'<div class="metric-card {regime_color}"><h4>HMM Regime</h4><h2 style="font-size: 1.1rem;">{dominant_regime}</h2><div class="sub-metric">Bull: {n_bull} | Bear: {n_bear}</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("HMM Regime", dominant_regime, f"Bull: {n_bull} | Bear: {n_bear}", regime_color)
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-            
-#            # Tabs for ETF Screener - Regime Analysis first
-            tab4, tab1, tab2, tab3, tab5 = st.tabs(["**🎯 Regime Analysis**", "**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**📋 Full Data**"])
-            
-            with tab1:
-                col_buy, col_sell = st.columns(2)
-                
-                with col_buy:
-                    st.markdown('<div class="signal-card buy"><div class="signal-card-header"><span class="signal-card-title">🟢 Buy Opportunities</span></div>', unsafe_allow_html=True)
-                    
-                    confirmed_buys = results_df[results_df['Trigger'] == 'BUY'].sort_values('Signal').head(15)
-                    if not confirmed_buys.empty:
-                        st.markdown('<span class="status-badge buy">CONFIRMED BUY SIGNALS</span>', unsafe_allow_html=True)
-                        for _, row in confirmed_buys.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    oversold = results_df[(results_df['Zone'] == 'Oversold') & (results_df['Trigger'] != 'BUY')].sort_values('Signal').head(15)
-                    if not oversold.empty:
-                        st.markdown('<span class="status-badge oversold">OVERSOLD ZONE</span>', unsafe_allow_html=True)
-                        for _, row in oversold.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                    
-                    if confirmed_buys.empty and oversold.empty:
-                        st.markdown('<p style="color: #888888; padding: 1rem;">No buy opportunities detected</p>', unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                with col_sell:
-                    st.markdown('<div class="signal-card sell"><div class="signal-card-header"><span class="signal-card-title">🔴 Sell Opportunities</span></div>', unsafe_allow_html=True)
-                    
-                    confirmed_sells = results_df[results_df['Trigger'] == 'SELL'].sort_values('Signal', ascending=False).head(15)
-                    if not confirmed_sells.empty:
-                        st.markdown('<span class="status-badge sell">CONFIRMED SELL SIGNALS</span>', unsafe_allow_html=True)
-                        for _, row in confirmed_sells.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    overbought = results_df[(results_df['Zone'] == 'Overbought') & (results_df['Trigger'] != 'SELL')].sort_values('Signal', ascending=False).head(15)
-                    if not overbought.empty:
-                        st.markdown('<span class="status-badge overbought">OVERBOUGHT ZONE</span>', unsafe_allow_html=True)
-                        for _, row in overbought.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • ₹{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                    
-                    if confirmed_sells.empty and overbought.empty:
-                        st.markdown('<p style="color: #888888; padding: 1rem;">No sell opportunities detected</p>', unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Divergence alerts
+
+            # Fresh institutional research design: Executive → Opportunities → Analysis → Context → Data
+            tab_summary, tab_opps, tab_signals, tab_structure, tab_data = st.tabs(["Summary", "Opportunities", "Signal Analysis", "Market Structure", "Data Explorer"])
+
+            with tab_summary:
+                # Executive snapshot for decision makers
+                comps.render_section_header("Executive Summary", "Key performance indicators and regime context", icon="list", accent="cyan")
+
+                # KPI metrics in grid
+                metric_col1, metric_col2, metric_col3, metric_col4, metric_col5, metric_col6 = st.columns(6)
+                with metric_col1:
+                    comps.render_metric_card("Universe", f"{len(results_df)}", "ETFs", "info")
+                with metric_col2:
+                    comps.render_metric_card("Buy Signals", f"{n_buys}", "Confirmed", "success")
+                with metric_col3:
+                    comps.render_metric_card("Sell Signals", f"{n_sells}", "Confirmed", "danger")
+                with metric_col4:
+                    oversold_pct = f"{n_oversold/len(results_df)*100:.0f}%"
+                    comps.render_metric_card("Oversold", oversold_pct, f"{n_oversold} ETFs", "info")
+                with metric_col5:
+                    overbought_pct = f"{n_overbought/len(results_df)*100:.0f}%"
+                    comps.render_metric_card("Overbought", overbought_pct, f"{n_overbought} ETFs", "warning")
+                with metric_col6:
+                    comps.render_metric_card("Avg Signal", f"{results_df['Signal'].mean():.1f}", "Population mean", "neutral")
+
                 st.markdown("<br>", unsafe_allow_html=True)
-                bull_divs = results_df[results_df['Divergence'] == 'BULL']
-                bear_divs = results_df[results_df['Divergence'] == 'BEAR']
-                
-                if not bull_divs.empty or not bear_divs.empty:
-                    st.markdown("##### 📊 Divergence Alerts")
-                    div_cols = st.columns(2)
-                    with div_cols[0]:
-                        if not bull_divs.empty:
-                            st.markdown('<span class="status-badge divergence">BULLISH DIVERGENCES</span>', unsafe_allow_html=True)
-                            for _, row in bull_divs.head(10).iterrows():
-                                st.markdown(f'<div class="symbol-row"><span class="symbol-name">{row["DisplayName"]}</span><span style="color: #FFC300;">Price ▼ | Signal ▲</span></div>', unsafe_allow_html=True)
-                    with div_cols[1]:
-                        if not bear_divs.empty:
-                            st.markdown('<span class="status-badge divergence">BEARISH DIVERGENCES</span>', unsafe_allow_html=True)
-                            for _, row in bear_divs.head(10).iterrows():
-                                st.markdown(f'<div class="symbol-row"><span class="symbol-name">{row["DisplayName"]}</span><span style="color: #FFC300;">Price ▲ | Signal ▼</span></div>', unsafe_allow_html=True)
-            
-            with tab2:
-                st.markdown("##### 🏆 Top Oversold ETFs")
-                top_oversold = results_df.nsmallest(15, 'Signal')
-                cols_o = ['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'MMR', 'Zone', 'Trigger']
-                st.dataframe(top_oversold[cols_o].rename(columns={'DisplayName': 'ETF', 'Change': 'Chg %'}), width="stretch", hide_index=True)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("##### 🔻 Top Overbought ETFs")
-                top_overbought = results_df.nlargest(15, 'Signal')
-                st.dataframe(top_overbought[cols_o].rename(columns={'DisplayName': 'ETF', 'Change': 'Chg %'}), width="stretch", hide_index=True)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("##### 📊 Signal Ranking Chart")
-                st.plotly_chart(create_ranking_chart(results_df, 15), width="stretch", config={'displayModeBar': False})
-            
-            with tab3:
-                col_d1, col_d2 = st.columns(2)
-                
-                with col_d1:
-                    st.markdown("##### Signal Distribution")
-                    st.plotly_chart(create_distribution_chart(results_df), width="stretch", config={'displayModeBar': False})
-                    
-                    st.markdown("##### Zone Breakdown")
-                    zone_data = {
-                        "Zone": ["Oversold (< -5)", "Neutral (-5 to +5)", "Overbought (> +5)"],
-                        "Count": [n_oversold, n_neutral, n_overbought],
-                        "Percentage": [f"{n_oversold/len(results_df)*100:.1f}%", f"{n_neutral/len(results_df)*100:.1f}%", f"{n_overbought/len(results_df)*100:.1f}%"]
-                    }
-                    st.dataframe(pd.DataFrame(zone_data), width="stretch", hide_index=True)
-                
-                with col_d2:
-                    st.markdown("##### Statistical Summary")
-                    stats_data = {
-                        "Metric": ["Total ETFs", "Mean Signal", "Median Signal", "Std Dev", "Min Signal", "Max Signal", "Buy/Sell Ratio"],
-                        "Value": [
-                            f"{len(results_df)}",
-                            f"{results_df['Signal'].mean():.2f}",
-                            f"{results_df['Signal'].median():.2f}",
-                            f"{results_df['Signal'].std():.2f}",
-                            f"{results_df['Signal'].min():.2f}",
-                            f"{results_df['Signal'].max():.2f}",
-                            f"{n_buys}:{n_sells}" if n_sells > 0 else f"{n_buys}:0"
-                        ]
-                    }
-                    st.dataframe(pd.DataFrame(stats_data), width="stretch", hide_index=True)
-                    
-                    st.markdown("##### Top Gainers Today")
-                    top_gainers = results_df.nlargest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']]
-                    top_gainers.columns = ['ETF', 'Price', 'Chg %', 'Signal']
-                    st.dataframe(top_gainers, width="stretch", hide_index=True)
-                    
-                    st.markdown("##### Top Losers Today")
-                    top_losers = results_df.nsmallest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']]
-                    top_losers.columns = ['ETF', 'Price', 'Chg %', 'Signal']
-                    st.dataframe(top_losers, width="stretch", hide_index=True)
-            
-            with tab4:
-                # NEW: Regime Intelligence Analysis Tab
-                st.markdown("##### HMM Regime Distribution")
-                c1, c2 = st.columns(2)
-                
-                with c1:
+
+                # Regime snapshot
+                comps.render_section_header("Market Regime — HMM State & Volatility", "Current market conditions and probability states", icon="layers", accent="emerald")
+                regime_col1, regime_col2 = st.columns(2)
+
+                with regime_col1:
                     regime_counts = results_df['Regime'].value_counts()
                     regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
                     fig_regime = go.Figure(go.Pie(
@@ -2266,10 +1611,10 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
-                    fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='HMM Regime', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
-                
-                with c2:
+                    fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='HMM Regime', font=dict(size=12, color='#888888')))
+                    st.plotly_chart(fig_regime, use_container_width=True, key="regime_pie")
+
+                with regime_col2:
                     vol_counts = results_df['Vol_Regime'].value_counts()
                     vol_colors = {'LOW': '#10b981', 'NORMAL': '#888888', 'HIGH': '#f59e0b', 'EXTREME': '#ef4444'}
                     fig_vol = go.Figure(go.Pie(
@@ -2277,41 +1622,203 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         marker=dict(colors=[vol_colors.get(v, '#888888') for v in vol_counts.index], line=dict(color='#1A1A1A', width=2)),
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
-                    fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='Volatility Regime (GARCH)', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
-                
-                st.markdown("##### Regime Breakdown by ETF")
-                
-                # Bull regime ETFs
-                col_bull, col_bear = st.columns(2)
-                with col_bull:
-                    st.markdown('<span class="status-badge buy">BULLISH REGIME ETFs</span>', unsafe_allow_html=True)
-                    bull_etfs = results_df[results_df['Regime'].str.contains('BULL', na=False)].sort_values('HMM_Bull', ascending=False)
-                    if len(bull_etfs) > 0:
-                        for _, row in bull_etfs.head(10).iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #10b981;">P(Bull): {row["HMM_Bull"]:.0%}</span></div>', unsafe_allow_html=True)
+                    fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='Volatility Regime', font=dict(size=12, color='#888888')))
+                    st.plotly_chart(fig_vol, use_container_width=True, key="vol_pie")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Signal distribution
+                comps.render_section_header("Signal Distribution", "Cross-sectional view of signal spread", icon="trending-up", accent="amber")
+                st.plotly_chart(create_distribution_chart(results_df), use_container_width=True, key="distribution")
+
+            with tab_opps:
+                # Ranked opportunities for traders
+                comps.render_section_header("Opportunity Ranking", "All assets ranked by signal strength and conviction", icon="target", accent="amber")
+
+                opp_tab1, opp_tab2 = st.tabs(["Buy Setup", "Sell Setup"])
+
+                with opp_tab1:
+                    # Buy opportunities
+                    buy_data = results_df[(results_df['Trigger'] == 'BUY') | (results_df['Zone'] == 'Oversold')].copy()
+                    buy_data = buy_data.sort_values('Signal').head(20)
+
+                    if not buy_data.empty:
+                        buy_display = buy_data[['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'MMR', 'Zone']].copy()
+                        buy_display.columns = ['ETF', 'Price', 'Chg %', 'Signal', 'MSF', 'MMR', 'Zone']
+                        st.dataframe(buy_display, width="stretch", hide_index=True)
+                        st.caption(f"Showing {len(buy_data)} buy setup candidates. Sorted by signal strength (lowest to highest).")
                     else:
-                        st.info("No ETFs in bullish regime")
-                
-                with col_bear:
-                    st.markdown('<span class="status-badge sell">BEARISH REGIME ETFs</span>', unsafe_allow_html=True)
-                    bear_etfs = results_df[results_df['Regime'].str.contains('BEAR', na=False)].sort_values('HMM_Bear', ascending=False)
-                    if len(bear_etfs) > 0:
-                        for _, row in bear_etfs.head(10).iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #ef4444;">P(Bear): {row["HMM_Bear"]:.0%}</span></div>', unsafe_allow_html=True)
+                        st.info("No buy opportunities in current scan.")
+
+                with opp_tab2:
+                    # Sell opportunities
+                    sell_data = results_df[(results_df['Trigger'] == 'SELL') | (results_df['Zone'] == 'Overbought')].copy()
+                    sell_data = sell_data.sort_values('Signal', ascending=False).head(20)
+
+                    if not sell_data.empty:
+                        sell_display = sell_data[['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'MMR', 'Zone']].copy()
+                        sell_display.columns = ['ETF', 'Price', 'Chg %', 'Signal', 'MSF', 'MMR', 'Zone']
+                        st.dataframe(sell_display, width="stretch", hide_index=True)
+                        st.caption(f"Showing {len(sell_data)} sell setup candidates. Sorted by signal strength (highest to lowest).")
                     else:
-                        st.info("No ETFs in bearish regime")
-                
-                # Change points
-                change_point_etfs = results_df[results_df['Change_Point'] == True]
-                if len(change_point_etfs) > 0:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown('<span class="status-badge regime">⚠️ CHANGE POINTS DETECTED</span>', unsafe_allow_html=True)
-                    for _, row in change_point_etfs.iterrows():
-                        st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • Regime Transition</span></div><span class="symbol-score" style="color: #a855f7;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-            
-            with tab5:
-                st.markdown(f"##### Complete ETF Scan Results ({len(results_df)} ETFs) - {analysis_date_str}")
+                        st.info("No sell opportunities in current scan.")
+
+            with tab_signals:
+                # Deep signal analysis
+                comps.render_section_header("Signal Decomposition", "MSF vs MMR component analysis and divergence alerts", icon="layers", accent="violet")
+
+                signal_tab1, signal_tab2, signal_tab3 = st.tabs(["Components", "Divergences", "Extremes"])
+
+                with signal_tab1:
+                    # MSF vs MMR breakdown
+                    comp_col1, comp_col2 = st.columns(2)
+
+                    with comp_col1:
+                        st.markdown("**MSF-Dominant (Structure)**")
+                        msf_heavy = results_df[results_df['MSF'].abs() > results_df['MMR'].abs()].sort_values('MSF').head(12)
+                        if not msf_heavy.empty:
+                            msf_display = msf_heavy[['DisplayName', 'Price', 'Signal', 'MSF', 'MMR']].copy()
+                            msf_display.columns = ['ETF', 'Price', 'Signal', 'MSF', 'MMR']
+                            st.dataframe(msf_display, width="stretch", hide_index=True, height=300)
+                        else:
+                            st.caption("No MSF-dominant signals found.")
+
+                    with comp_col2:
+                        st.markdown("**MMR-Dominant (Macro)**")
+                        mmr_heavy = results_df[results_df['MMR'].abs() > results_df['MSF'].abs()].sort_values('MMR').head(12)
+                        if not mmr_heavy.empty:
+                            mmr_display = mmr_heavy[['DisplayName', 'Price', 'Signal', 'MSF', 'MMR']].copy()
+                            mmr_display.columns = ['ETF', 'Price', 'Signal', 'MSF', 'MMR']
+                            st.dataframe(mmr_display, width="stretch", hide_index=True, height=300)
+                        else:
+                            st.caption("No MMR-dominant signals found.")
+
+                with signal_tab2:
+                    # Divergence analysis
+                    bull_divs = results_df[results_df['Divergence'] == 'BULL']
+                    bear_divs = results_df[results_df['Divergence'] == 'BEAR']
+
+                    if not bull_divs.empty or not bear_divs.empty:
+                        div_col1, div_col2 = st.columns(2)
+
+                        with div_col1:
+                            if not bull_divs.empty:
+                                st.markdown("**Bullish Divergences** (Price down, Signal up)")
+                                div_display = bull_divs[['DisplayName', 'Price', 'Signal', 'Divergence']].copy()
+                                div_display.columns = ['ETF', 'Price', 'Signal', 'Type']
+                                st.dataframe(div_display, width="stretch", hide_index=True)
+                            else:
+                                st.caption("No bullish divergences detected.")
+
+                        with div_col2:
+                            if not bear_divs.empty:
+                                st.markdown("**Bearish Divergences** (Price up, Signal down)")
+                                div_display = bear_divs[['DisplayName', 'Price', 'Signal', 'Divergence']].copy()
+                                div_display.columns = ['ETF', 'Price', 'Signal', 'Type']
+                                st.dataframe(div_display, width="stretch", hide_index=True)
+                            else:
+                                st.caption("No bearish divergences detected.")
+                    else:
+                        st.info("No divergences detected in current scan.")
+
+                with signal_tab3:
+                    # Signal extremes chart
+                    st.plotly_chart(create_ranking_chart(results_df, 15), use_container_width=True, key="ranking_15")
+
+            with tab_structure:
+                # Market context and structure
+                comps.render_section_header("Market Composition", "Universe statistics, regime breakdown, and performance", icon="grid", accent="info")
+
+                struct_tab1, struct_tab2, struct_tab3 = st.tabs(["Statistics", "Regime Mapping", "Performance"])
+
+                with struct_tab1:
+                    # Statistical breakdown
+                    stat_col1, stat_col2 = st.columns(2)
+
+                    with stat_col1:
+                        st.markdown("**Signal Metrics**")
+                        signal_stats = {
+                            "Metric": ["Mean", "Median", "Std Dev", "Min", "Max", "Q1 (25%)", "Q3 (75%)"],
+                            "Value": [
+                                f"{results_df['Signal'].mean():.2f}",
+                                f"{results_df['Signal'].median():.2f}",
+                                f"{results_df['Signal'].std():.2f}",
+                                f"{results_df['Signal'].min():.2f}",
+                                f"{results_df['Signal'].max():.2f}",
+                                f"{results_df['Signal'].quantile(0.25):.2f}",
+                                f"{results_df['Signal'].quantile(0.75):.2f}",
+                            ]
+                        }
+                        st.dataframe(pd.DataFrame(signal_stats), width="stretch", hide_index=True)
+
+                    with stat_col2:
+                        st.markdown("**Zone Distribution**")
+                        zone_stats = {
+                            "Zone": ["Oversold", "Neutral", "Overbought"],
+                            "Count": [n_oversold, n_neutral, n_overbought],
+                            "Pct": [f"{n_oversold/len(results_df)*100:.1f}%", f"{n_neutral/len(results_df)*100:.1f}%", f"{n_overbought/len(results_df)*100:.1f}%"]
+                        }
+                        st.dataframe(pd.DataFrame(zone_stats), width="stretch", hide_index=True)
+
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("**Trigger Summary**")
+                        trigger_stats = {
+                            "Trigger": ["Buy", "Sell", "Neutral"],
+                            "Count": [n_buys, n_sells, len(results_df) - n_buys - n_sells],
+                            "Pct": [f"{n_buys/len(results_df)*100:.1f}%", f"{n_sells/len(results_df)*100:.1f}%", f"{(len(results_df)-n_buys-n_sells)/len(results_df)*100:.1f}%"]
+                        }
+                        st.dataframe(pd.DataFrame(trigger_stats), width="stretch", hide_index=True)
+
+                with struct_tab2:
+                    # Regime breakdown
+                    regime_col1, regime_col2 = st.columns(2)
+
+                    with regime_col1:
+                        st.markdown("**Bullish Regime ETFs**")
+                        bull_etfs = results_df[results_df['Regime'].str.contains('BULL', na=False)].sort_values('HMM_Bull', ascending=False).head(15)
+                        if not bull_etfs.empty:
+                            bull_display = bull_etfs[['DisplayName', 'Regime', 'HMM_Bull', 'HMM_Bear']].copy()
+                            bull_display.columns = ['ETF', 'Regime', 'P(Bull)', 'P(Bear)']
+                            st.dataframe(bull_display, width="stretch", hide_index=True, height=350)
+                        else:
+                            st.info("No ETFs in bullish regime.")
+
+                    with regime_col2:
+                        st.markdown("**Bearish Regime ETFs**")
+                        bear_etfs = results_df[results_df['Regime'].str.contains('BEAR', na=False)].sort_values('HMM_Bear', ascending=False).head(15)
+                        if not bear_etfs.empty:
+                            bear_display = bear_etfs[['DisplayName', 'Regime', 'HMM_Bull', 'HMM_Bear']].copy()
+                            bear_display.columns = ['ETF', 'Regime', 'P(Bull)', 'P(Bear)']
+                            st.dataframe(bear_display, width="stretch", hide_index=True, height=350)
+                        else:
+                            st.info("No ETFs in bearish regime.")
+
+                    # Change points
+                    change_points = results_df[results_df['Change_Point'] == True]
+                    if not change_points.empty:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("**Regime Change Points Detected**")
+                        cp_display = change_points[['DisplayName', 'Regime', 'Signal', 'Confidence']].copy()
+                        cp_display.columns = ['ETF', 'Regime', 'Signal', 'Confidence']
+                        st.dataframe(cp_display, width="stretch", hide_index=True)
+
+                with struct_tab3:
+                    # Performance metrics
+                    perf_col1, perf_col2 = st.columns(2)
+
+                    with perf_col1:
+                        st.markdown("**Top Gainers Today**")
+                        gainers = results_df.nlargest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']].copy()
+                        gainers.columns = ['ETF', 'Price', 'Chg %', 'Signal']
+                        st.dataframe(gainers, width="stretch", hide_index=True)
+
+                    with perf_col2:
+                        st.markdown("**Top Losers Today**")
+                        losers = results_df.nsmallest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']].copy()
+                        losers.columns = ['ETF', 'Price', 'Chg %', 'Signal']
+                        st.dataframe(losers, width="stretch", hide_index=True)
+
+            with tab_data:
                 
                 # Filter options
                 filter_col1, filter_col2, filter_col3 = st.columns(3)
@@ -2347,14 +1854,18 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
             st.warning("No data retrieved. Please check your internet connection.")
 
 
-def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date):
+def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, run_clicked):
     """Market Screener: Full NIRNAY analysis (MSF + MMR + Regime) on F&O / Index stocks"""
     
     # Format analysis date
     analysis_date = spread_date if spread_date else datetime.date.today()
     analysis_date_str = analysis_date.strftime("%d %b %Y")
     is_today = analysis_date == datetime.date.today()
-    
+
+    # Top spacing
+    comps.section_gap()
+    comps.section_gap()
+
     # Display universe info
     if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
         universe_title = "F&O Stocks"
@@ -2378,28 +1889,111 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
     else:
         ccy = "₹"
 
-    st.markdown(f"""
-    <div class='info-box'>
-        <h4>📊 Market Screener - {universe_title}</h4>
-        <p>{universe_desc}<br>
-        <strong>Analysis Date:</strong> {analysis_date_str} {"(Today)" if is_today else ""}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    accent_color = "cyan" if spread_universe == "India Indexes" else ("amber" if spread_universe == "Commodities" else ("violet" if spread_universe == "Currency" else "emerald"))
+    comps.render_section_header(
+        f"Market Screener — {universe_title}",
+        f"{universe_desc} Analysis Date: {analysis_date_str} {'(Today)' if is_today else ''}",
+        icon="target",
+        accent=accent_color
+    )
+
     st.markdown("<br>", unsafe_allow_html=True)
-    
+
+    # Universe Overview Section
+    col1, col2, col3, col4 = st.columns(4)
+
+    # Dynamically show metrics based on selected universe
+    if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
+        with col1:
+            comps.render_metric_card("Universe", "F&O", "NSE Securities", "info")
+        with col2:
+            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
+        with col3:
+            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+        with col4:
+            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+    elif spread_universe in ("India Indexes", "US Indexes"):
+        num_symbols = len(get_index_stock_list(spread_index)[0]) if get_index_stock_list(spread_index)[0] else 0
+        with col1:
+            comps.render_metric_card("Universe", spread_index, f"{num_symbols} constituents" if num_symbols else "Index", "info")
+        with col2:
+            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
+        with col3:
+            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+        with col4:
+            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+    elif spread_universe == "Commodities":
+        with col1:
+            comps.render_metric_card("Universe", "Commodities", f"{len(COMMODITY_TICKERS)} futures", "info")
+        with col2:
+            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "amber")
+        with col3:
+            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+        with col4:
+            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+    elif spread_universe == "Currency":
+        with col1:
+            comps.render_metric_card("Universe", "FX Pairs", f"{len(CURRENCY_TICKERS)} pairs", "info")
+        with col2:
+            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "violet")
+        with col3:
+            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+        with col4:
+            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+
+    comps.section_gap()
+    comps.section_gap()
+
+    comps.render_section_header(
+        "Analysis Framework",
+        "Market Structure (MSF) + Macro Regression (MMR) decomposition with regime-aware signal scoring",
+        icon="layers",
+        accent="emerald"
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                Internal price structure via momentum ROC, efficiency ratio, and microstructure decomposition.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_m2:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                Macro correlation tracking bond yields, currencies, and commodity flows for regime shifts.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_m3:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                HMM state evolution, volatility regime distribution, and change point timeline.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     # Validate analysis date
     if analysis_date > datetime.date.today():
         st.error("⚠️ Analysis date cannot be in the future.")
         return
-    
-    if st.button("◈ RUN MARKET SCREENER", type="primary"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    if run_clicked:
+        progress_slot = st.empty()
+
         # Fetch stock list based on universe selection
-        status_text.markdown(f"**⏳ Fetching {universe_title} stock list...**")
-        
+        theme.progress_bar(progress_slot, 5, f"Fetching {universe_title} list", "Initializing analysis...")
+
         if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
             stock_list, fetch_msg = get_fno_stock_list()
         elif spread_universe in ("India Indexes", "US Indexes"):
@@ -2410,43 +2004,39 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             stock_list, fetch_msg = get_currency_list()
         else:
             stock_list, fetch_msg = None, "Unknown universe"
-        
+
         if not stock_list:
             st.error(f"Failed to fetch stock list: {fetch_msg}")
-            progress_bar.empty()
-            status_text.empty()
+            progress_slot.empty()
             return
-        
-        st.toast(fetch_msg, icon="⚠️" if fetch_msg.startswith("⚠") else "✅")
+
+        st.toast(fetch_msg)
         total_stocks = len(stock_list)
-        
+
         # Batch download data
-        status_text.markdown(f"**⏳ Downloading data for {total_stocks} stocks...**")
-        progress_bar.progress(0.05)
-        
+        theme.progress_bar(progress_slot, 10, "Downloading Data", f"{total_stocks} securities to analyze")
+
         data_dict, batch_msg = fetch_batch_data(stock_list, end_date=analysis_date, days_back=100)
-        
+
         if data_dict is None:
             st.error(f"Failed to download data: {batch_msg}")
-            progress_bar.empty()
-            status_text.empty()
+            progress_slot.empty()
             return
-        
-        st.toast(batch_msg, icon="📥")
-        
+
+        st.toast(batch_msg)
+
         # Fetch macro data ONCE for all stocks (VIX, DXY, rates are market-wide)
-        status_text.markdown("**⏳ Fetching macro data for MMR analysis...**")
-        progress_bar.progress(0.1)
+        theme.progress_bar(progress_slot, 15, "Macro Data", "Fetching global macro factors for MMR...")
         macro_df = fetch_macro_data(days_back=100)
-        
+
         # Process each stock
         results = []
         valid_tickers = list(data_dict.keys())
         total_valid = len(valid_tickers)
-        
+
         for i, ticker in enumerate(valid_tickers):
-            status_text.markdown(f"**⏳ Analyzing {ticker.replace('.NS', '')} ({i+1}/{total_valid})**")
-            progress_bar.progress(0.1 + (0.9 * (i + 1) / total_valid))
+            pct = 15 + int(75 * (i + 1) / total_valid)
+            theme.progress_bar(progress_slot, pct, f"Analyzing {ticker.replace('.NS', '')}", f"{i+1}/{total_valid} securities")
             
             df = data_dict[ticker]
             
@@ -2503,12 +2093,11 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                     })
                 except Exception:
                     pass
-        
-        progress_bar.empty()
-        status_text.empty()
-        
+
+        progress_slot.empty()
+
         if results:
-            st.toast(f"Market Scan Complete! Analyzed {len(results)}/{total_stocks} stocks", icon="✅")
+            st.toast(f"Market Scan Complete! Analyzed {len(results)}/{total_stocks} stocks")
             results_df = pd.DataFrame(results)
             
             # Calculate summary stats
@@ -2530,147 +2119,51 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             st.markdown("<br>", unsafe_allow_html=True)
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             with c1:
-                st.markdown(f'<div class="metric-card info"><h4>Universe</h4><h2>{len(results)}</h2><div class="sub-metric">{universe_title} Analyzed</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Universe", f"{len(results)}", f"{universe_title} Analyzed", "info")
             with c2:
-                st.markdown(f'<div class="metric-card success"><h4>Oversold</h4><h2>{n_oversold}</h2><div class="sub-metric">Buy Zone</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Oversold", f"{n_oversold}", "Buy Zone", "success")
             with c3:
-                st.markdown(f'<div class="metric-card danger"><h4>Overbought</h4><h2>{n_overbought}</h2><div class="sub-metric">Sell Zone</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Overbought", f"{n_overbought}", "Sell Zone", "danger")
             with c4:
-                st.markdown(f'<div class="metric-card primary"><h4>Buy Signals</h4><h2>{n_buys}</h2><div class="sub-metric">Confirmed</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Buy Signals", f"{n_buys}", "Confirmed", "primary")
             with c5:
-                st.markdown(f'<div class="metric-card warning"><h4>Sell Signals</h4><h2>{n_sells}</h2><div class="sub-metric">Confirmed</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("Sell Signals", f"{n_sells}", "Confirmed", "warning")
             with c6:
-                st.markdown(f'<div class="metric-card {regime_color}"><h4>HMM Regime</h4><h2 style="font-size: 1.1rem;">{dominant_regime}</h2><div class="sub-metric">Bull: {n_bull} | Bear: {n_bear}</div></div>', unsafe_allow_html=True)
+                comps.render_metric_card("HMM Regime", dominant_regime, f"Bull: {n_bull} | Bear: {n_bear}", regime_color)
             
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-            
-#            # Tabs for Market Screener Single Day - Regime Analysis first
-            tab4, tab1, tab2, tab3, tab5 = st.tabs(["**🎯 Regime Analysis**", "**📊 Signal Dashboard**", "**📈 Top Signals**", "**📉 Distribution**", "**📋 Full Data**"])
-            
-            with tab1:
-                col_buy, col_sell = st.columns(2)
-                
-                with col_buy:
-                    st.markdown('<div class="signal-card buy"><div class="signal-card-header"><span class="signal-card-title">🟢 Buy Opportunities</span></div>', unsafe_allow_html=True)
-                    
-                    confirmed_buys = results_df[results_df['Trigger'] == 'BUY'].sort_values('Signal').head(15)
-                    if not confirmed_buys.empty:
-                        st.markdown('<span class="status-badge buy">CONFIRMED BUY SIGNALS</span>', unsafe_allow_html=True)
-                        for _, row in confirmed_buys.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #10b981;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    oversold = results_df[(results_df['Zone'] == 'Oversold') & (results_df['Trigger'] != 'BUY')].sort_values('Signal').head(15)
-                    if not oversold.empty:
-                        st.markdown('<span class="status-badge oversold">OVERSOLD ZONE</span>', unsafe_allow_html=True)
-                        for _, row in oversold.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #06b6d4;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                    
-                    if confirmed_buys.empty and oversold.empty:
-                        st.markdown('<p style="color: #888888; padding: 1rem;">No buy opportunities detected</p>', unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                with col_sell:
-                    st.markdown('<div class="signal-card sell"><div class="signal-card-header"><span class="signal-card-title">🔴 Sell Opportunities</span></div>', unsafe_allow_html=True)
-                    
-                    confirmed_sells = results_df[results_df['Trigger'] == 'SELL'].sort_values('Signal', ascending=False).head(15)
-                    if not confirmed_sells.empty:
-                        st.markdown('<span class="status-badge sell">CONFIRMED SELL SIGNALS</span>', unsafe_allow_html=True)
-                        for _, row in confirmed_sells.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #ef4444;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    overbought = results_df[(results_df['Zone'] == 'Overbought') & (results_df['Trigger'] != 'SELL')].sort_values('Signal', ascending=False).head(15)
-                    if not overbought.empty:
-                        st.markdown('<span class="status-badge overbought">OVERBOUGHT ZONE</span>', unsafe_allow_html=True)
-                        for _, row in overbought.iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {ccy}{row["Price"]:,.2f}</span></div><span class="symbol-score" style="color: #f59e0b;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-                    
-                    if confirmed_sells.empty and overbought.empty:
-                        st.markdown('<p style="color: #888888; padding: 1rem;">No sell opportunities detected</p>', unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Divergence alerts
+
+            # Fresh institutional research design: Executive → Opportunities → Analysis → Context → Data
+            tab_summary, tab_opps, tab_signals, tab_structure, tab_data = st.tabs(["Summary", "Opportunities", "Signal Analysis", "Market Structure", "Data Explorer"])
+
+            with tab_summary:
+                # Executive snapshot for decision makers
+                comps.render_section_header("Executive Summary", "Key performance indicators and regime context", icon="list", accent="cyan")
+
+                # KPI metrics in grid
+                metric_col1, metric_col2, metric_col3, metric_col4, metric_col5, metric_col6 = st.columns(6)
+                with metric_col1:
+                    comps.render_metric_card("Universe", f"{len(results_df)}", "Securities", "info")
+                with metric_col2:
+                    comps.render_metric_card("Buy Signals", f"{n_buys}", "Confirmed", "success")
+                with metric_col3:
+                    comps.render_metric_card("Sell Signals", f"{n_sells}", "Confirmed", "danger")
+                with metric_col4:
+                    oversold_pct = f"{n_oversold/len(results_df)*100:.0f}%"
+                    comps.render_metric_card("Oversold", oversold_pct, f"{n_oversold} assets", "info")
+                with metric_col5:
+                    overbought_pct = f"{n_overbought/len(results_df)*100:.0f}%"
+                    comps.render_metric_card("Overbought", overbought_pct, f"{n_overbought} assets", "warning")
+                with metric_col6:
+                    comps.render_metric_card("Avg Signal", f"{results_df['Signal'].mean():.1f}", "Population mean", "neutral")
+
                 st.markdown("<br>", unsafe_allow_html=True)
-                bull_divs = results_df[results_df['Divergence'] == 'BULL']
-                bear_divs = results_df[results_df['Divergence'] == 'BEAR']
-                
-                if not bull_divs.empty or not bear_divs.empty:
-                    st.markdown("##### 📊 Divergence Alerts")
-                    div_cols = st.columns(2)
-                    with div_cols[0]:
-                        if not bull_divs.empty:
-                            st.markdown('<span class="status-badge divergence">BULLISH DIVERGENCES</span>', unsafe_allow_html=True)
-                            for _, row in bull_divs.head(10).iterrows():
-                                st.markdown(f'<div class="symbol-row"><span class="symbol-name">{row["DisplayName"]}</span><span style="color: #FFC300;">Price ▼ | Signal ▲</span></div>', unsafe_allow_html=True)
-                    with div_cols[1]:
-                        if not bear_divs.empty:
-                            st.markdown('<span class="status-badge divergence">BEARISH DIVERGENCES</span>', unsafe_allow_html=True)
-                            for _, row in bear_divs.head(10).iterrows():
-                                st.markdown(f'<div class="symbol-row"><span class="symbol-name">{row["DisplayName"]}</span><span style="color: #FFC300;">Price ▲ | Signal ▼</span></div>', unsafe_allow_html=True)
-            
-            with tab2:
-                st.markdown("##### 🏆 Top 20 Most Oversold")
-                top_oversold = results_df.nsmallest(20, 'Signal')
-                cols_o = ['DisplayName', 'Price', 'Change', 'Signal', 'Zone', 'Trigger']
-                st.dataframe(top_oversold[cols_o].rename(columns={'DisplayName': 'Symbol', 'Change': 'Chg %'}), width="stretch", hide_index=True)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("##### 🔻 Top 20 Most Overbought")
-                top_overbought = results_df.nlargest(20, 'Signal')
-                st.dataframe(top_overbought[cols_o].rename(columns={'DisplayName': 'Symbol', 'Change': 'Chg %'}), width="stretch", hide_index=True)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("##### 📊 Extreme Signals Chart")
-                st.plotly_chart(create_ranking_chart(results_df, 20), width="stretch", config={'displayModeBar': False})
-            
-            with tab3:
-                col_d1, col_d2 = st.columns(2)
-                
-                with col_d1:
-                    st.markdown("##### Signal Distribution")
-                    st.plotly_chart(create_distribution_chart(results_df), width="stretch", config={'displayModeBar': False})
-                    
-                    st.markdown("##### Zone Breakdown")
-                    zone_data = {
-                        "Zone": ["Oversold (< -5)", "Neutral (-5 to +5)", "Overbought (> +5)"],
-                        "Count": [n_oversold, n_neutral, n_overbought],
-                        "Percentage": [f"{n_oversold/len(results_df)*100:.1f}%", f"{n_neutral/len(results_df)*100:.1f}%", f"{n_overbought/len(results_df)*100:.1f}%"]
-                    }
-                    st.dataframe(pd.DataFrame(zone_data), width="stretch", hide_index=True)
-                
-                with col_d2:
-                    st.markdown("##### Statistical Summary")
-                    stats_data = {
-                        "Metric": ["Total Stocks", "Mean Signal", "Median Signal", "Std Dev", "Min Signal", "Max Signal", "Buy/Sell Ratio"],
-                        "Value": [
-                            f"{len(results_df)}",
-                            f"{results_df['Signal'].mean():.2f}",
-                            f"{results_df['Signal'].median():.2f}",
-                            f"{results_df['Signal'].std():.2f}",
-                            f"{results_df['Signal'].min():.2f}",
-                            f"{results_df['Signal'].max():.2f}",
-                            f"{n_buys}:{n_sells}" if n_sells > 0 else f"{n_buys}:0"
-                        ]
-                    }
-                    st.dataframe(pd.DataFrame(stats_data), width="stretch", hide_index=True)
-                    
-                    st.markdown("##### Top Gainers Today")
-                    top_gainers = results_df.nlargest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']]
-                    top_gainers.columns = ['Symbol', 'Price', 'Chg %', 'Signal']
-                    st.dataframe(top_gainers, width="stretch", hide_index=True)
-                    
-                    st.markdown("##### Top Losers Today")
-                    top_losers = results_df.nsmallest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']]
-                    top_losers.columns = ['Symbol', 'Price', 'Chg %', 'Signal']
-                    st.dataframe(top_losers, width="stretch", hide_index=True)
-            
-            with tab4:
-                # NEW: Regime Intelligence Analysis Tab
-                st.markdown("##### HMM Regime Distribution")
-                c1, c2 = st.columns(2)
-                
-                with c1:
+
+                # Regime snapshot
+                comps.render_section_header("Market Regime — HMM State & Volatility", "Current market conditions and probability states", icon="layers", accent="emerald")
+                regime_col1, regime_col2 = st.columns(2)
+
+                with regime_col1:
                     regime_counts = results_df['Regime'].value_counts()
                     regime_colors = {'BULL': '#10b981', 'WEAK_BULL': '#34d399', 'NEUTRAL': '#888888', 'WEAK_BEAR': '#fbbf24', 'BEAR': '#ef4444', 'TRANSITION': '#a855f7'}
                     fig_regime = go.Figure(go.Pie(
@@ -2678,10 +2171,10 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                         marker=dict(colors=[regime_colors.get(r, '#888888') for r in regime_counts.index], line=dict(color='#1A1A1A', width=2)),
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
-                    fig_regime.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='HMM Regime', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
-                
-                with c2:
+                    fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='HMM Regime', font=dict(size=12, color='#888888')))
+                    st.plotly_chart(fig_regime, use_container_width=True, key="regime_pie")
+
+                with regime_col2:
                     vol_counts = results_df['Vol_Regime'].value_counts()
                     vol_colors = {'LOW': '#10b981', 'NORMAL': '#888888', 'HIGH': '#f59e0b', 'EXTREME': '#ef4444'}
                     fig_vol = go.Figure(go.Pie(
@@ -2689,40 +2182,203 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                         marker=dict(colors=[vol_colors.get(v, '#888888') for v in vol_counts.index], line=dict(color='#1A1A1A', width=2)),
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
-                    fig_vol.update_layout(paper_bgcolor='rgba(0,0,0,0)', font=dict(family='Inter', color='#EAEAEA'), height=300, margin=dict(l=20, r=20, t=30, b=20), showlegend=False, title=dict(text='Volatility Regime (GARCH)', font=dict(size=14, color='#888888')))
-                    st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
-                
-                st.markdown("##### Regime Breakdown by Stock")
-                
-                # Bull regime stocks
-                col_bull, col_bear = st.columns(2)
-                with col_bull:
-                    st.markdown('<span class="status-badge buy">BULLISH REGIME STOCKS</span>', unsafe_allow_html=True)
-                    bull_stocks = results_df[results_df['Regime'].str.contains('BULL', na=False)].sort_values('HMM_Bull', ascending=False)
-                    if len(bull_stocks) > 0:
-                        for _, row in bull_stocks.head(15).iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #10b981;">P(Bull): {row["HMM_Bull"]:.0%}</span></div>', unsafe_allow_html=True)
+                    fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='Volatility Regime', font=dict(size=12, color='#888888')))
+                    st.plotly_chart(fig_vol, use_container_width=True, key="vol_pie")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Signal distribution
+                comps.render_section_header("Signal Distribution", "Cross-sectional view of signal spread", icon="trending-up", accent="amber")
+                st.plotly_chart(create_distribution_chart(results_df), use_container_width=True, key="distribution")
+
+            with tab_opps:
+                # Ranked opportunities for traders
+                comps.render_section_header("Opportunity Ranking", "All securities ranked by signal strength and conviction", icon="target", accent="amber")
+
+                opp_tab1, opp_tab2 = st.tabs(["Buy Setup", "Sell Setup"])
+
+                with opp_tab1:
+                    # Buy opportunities
+                    buy_data = results_df[(results_df['Trigger'] == 'BUY') | (results_df['Zone'] == 'Oversold')].copy()
+                    buy_data = buy_data.sort_values('Signal').head(25)
+
+                    if not buy_data.empty:
+                        buy_display = buy_data[['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'Zone']].copy()
+                        buy_display.columns = ['Symbol', 'Price', 'Chg %', 'Signal', 'MSF', 'Zone']
+                        st.dataframe(buy_display, width="stretch", hide_index=True)
+                        st.caption(f"Showing {len(buy_data)} buy setup candidates. Sorted by signal strength (lowest to highest).")
                     else:
-                        st.info("No stocks in bullish regime")
-                
-                with col_bear:
-                    st.markdown('<span class="status-badge sell">BEARISH REGIME STOCKS</span>', unsafe_allow_html=True)
-                    bear_stocks = results_df[results_df['Regime'].str.contains('BEAR', na=False)].sort_values('HMM_Bear', ascending=False)
-                    if len(bear_stocks) > 0:
-                        for _, row in bear_stocks.head(15).iterrows():
-                            st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • {row["Regime"]}</span></div><span class="symbol-score" style="color: #ef4444;">P(Bear): {row["HMM_Bear"]:.0%}</span></div>', unsafe_allow_html=True)
+                        st.info("No buy opportunities in current scan.")
+
+                with opp_tab2:
+                    # Sell opportunities
+                    sell_data = results_df[(results_df['Trigger'] == 'SELL') | (results_df['Zone'] == 'Overbought')].copy()
+                    sell_data = sell_data.sort_values('Signal', ascending=False).head(25)
+
+                    if not sell_data.empty:
+                        sell_display = sell_data[['DisplayName', 'Price', 'Change', 'Signal', 'MSF', 'Zone']].copy()
+                        sell_display.columns = ['Symbol', 'Price', 'Chg %', 'Signal', 'MSF', 'Zone']
+                        st.dataframe(sell_display, width="stretch", hide_index=True)
+                        st.caption(f"Showing {len(sell_data)} sell setup candidates. Sorted by signal strength (highest to lowest).")
                     else:
-                        st.info("No stocks in bearish regime")
-                
-                # Change points
-                change_point_stocks = results_df[results_df['Change_Point'] == True]
-                if len(change_point_stocks) > 0:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown('<span class="status-badge regime">⚠️ CHANGE POINTS DETECTED</span>', unsafe_allow_html=True)
-                    for _, row in change_point_stocks.head(10).iterrows():
-                        st.markdown(f'<div class="symbol-row"><div><span class="symbol-name">{row["DisplayName"]}</span><span class="symbol-price"> • Regime Transition</span></div><span class="symbol-score" style="color: #a855f7;">{row["Signal"]:.1f}</span></div>', unsafe_allow_html=True)
-            
-            with tab5:
+                        st.info("No sell opportunities in current scan.")
+
+            with tab_signals:
+                # Deep signal analysis
+                comps.render_section_header("Signal Decomposition", "MSF vs MMR component analysis and divergence alerts", icon="layers", accent="violet")
+
+                signal_tab1, signal_tab2, signal_tab3 = st.tabs(["Components", "Divergences", "Extremes"])
+
+                with signal_tab1:
+                    # MSF vs MMR breakdown
+                    comp_col1, comp_col2 = st.columns(2)
+
+                    with comp_col1:
+                        st.markdown("**MSF-Dominant (Structure)**")
+                        msf_heavy = results_df[results_df['MSF'].abs() > results_df['MMR'].abs()].sort_values('MSF').head(15)
+                        if not msf_heavy.empty:
+                            msf_display = msf_heavy[['DisplayName', 'Price', 'Signal', 'MSF']].copy()
+                            msf_display.columns = ['Symbol', 'Price', 'Signal', 'MSF']
+                            st.dataframe(msf_display, width="stretch", hide_index=True, height=350)
+                        else:
+                            st.caption("No MSF-dominant signals found.")
+
+                    with comp_col2:
+                        st.markdown("**MMR-Dominant (Macro)**")
+                        mmr_heavy = results_df[results_df['MMR'].abs() > results_df['MSF'].abs()].sort_values('MMR').head(15)
+                        if not mmr_heavy.empty:
+                            mmr_display = mmr_heavy[['DisplayName', 'Price', 'Signal', 'MMR']].copy()
+                            mmr_display.columns = ['Symbol', 'Price', 'Signal', 'MMR']
+                            st.dataframe(mmr_display, width="stretch", hide_index=True, height=350)
+                        else:
+                            st.caption("No MMR-dominant signals found.")
+
+                with signal_tab2:
+                    # Divergence analysis
+                    bull_divs = results_df[results_df['Divergence'] == 'BULL']
+                    bear_divs = results_df[results_df['Divergence'] == 'BEAR']
+
+                    if not bull_divs.empty or not bear_divs.empty:
+                        div_col1, div_col2 = st.columns(2)
+
+                        with div_col1:
+                            if not bull_divs.empty:
+                                st.markdown("**Bullish Divergences** (Price down, Signal up)")
+                                div_display = bull_divs[['DisplayName', 'Price', 'Signal', 'Divergence']].copy()
+                                div_display.columns = ['Symbol', 'Price', 'Signal', 'Type']
+                                st.dataframe(div_display, width="stretch", hide_index=True)
+                            else:
+                                st.caption("No bullish divergences detected.")
+
+                        with div_col2:
+                            if not bear_divs.empty:
+                                st.markdown("**Bearish Divergences** (Price up, Signal down)")
+                                div_display = bear_divs[['DisplayName', 'Price', 'Signal', 'Divergence']].copy()
+                                div_display.columns = ['Symbol', 'Price', 'Signal', 'Type']
+                                st.dataframe(div_display, width="stretch", hide_index=True)
+                            else:
+                                st.caption("No bearish divergences detected.")
+                    else:
+                        st.info("No divergences detected in current scan.")
+
+                with signal_tab3:
+                    # Signal extremes chart
+                    st.plotly_chart(create_ranking_chart(results_df, 20), use_container_width=True, key="ranking_20")
+
+            with tab_structure:
+                # Market context and structure
+                comps.render_section_header("Market Composition", "Universe statistics, regime breakdown, and performance", icon="grid", accent="info")
+
+                struct_tab1, struct_tab2, struct_tab3 = st.tabs(["Statistics", "Regime Mapping", "Performance"])
+
+                with struct_tab1:
+                    # Statistical breakdown
+                    stat_col1, stat_col2 = st.columns(2)
+
+                    with stat_col1:
+                        st.markdown("**Signal Metrics**")
+                        signal_stats = {
+                            "Metric": ["Mean", "Median", "Std Dev", "Min", "Max", "Q1 (25%)", "Q3 (75%)"],
+                            "Value": [
+                                f"{results_df['Signal'].mean():.2f}",
+                                f"{results_df['Signal'].median():.2f}",
+                                f"{results_df['Signal'].std():.2f}",
+                                f"{results_df['Signal'].min():.2f}",
+                                f"{results_df['Signal'].max():.2f}",
+                                f"{results_df['Signal'].quantile(0.25):.2f}",
+                                f"{results_df['Signal'].quantile(0.75):.2f}",
+                            ]
+                        }
+                        st.dataframe(pd.DataFrame(signal_stats), width="stretch", hide_index=True)
+
+                    with stat_col2:
+                        st.markdown("**Zone Distribution**")
+                        zone_stats = {
+                            "Zone": ["Oversold", "Neutral", "Overbought"],
+                            "Count": [n_oversold, n_neutral, n_overbought],
+                            "Pct": [f"{n_oversold/len(results_df)*100:.1f}%", f"{n_neutral/len(results_df)*100:.1f}%", f"{n_overbought/len(results_df)*100:.1f}%"]
+                        }
+                        st.dataframe(pd.DataFrame(zone_stats), width="stretch", hide_index=True)
+
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("**Trigger Summary**")
+                        trigger_stats = {
+                            "Trigger": ["Buy", "Sell", "Neutral"],
+                            "Count": [n_buys, n_sells, len(results_df) - n_buys - n_sells],
+                            "Pct": [f"{n_buys/len(results_df)*100:.1f}%", f"{n_sells/len(results_df)*100:.1f}%", f"{(len(results_df)-n_buys-n_sells)/len(results_df)*100:.1f}%"]
+                        }
+                        st.dataframe(pd.DataFrame(trigger_stats), width="stretch", hide_index=True)
+
+                with struct_tab2:
+                    # Regime breakdown
+                    regime_col1, regime_col2 = st.columns(2)
+
+                    with regime_col1:
+                        st.markdown("**Bullish Regime Securities**")
+                        bull_assets = results_df[results_df['Regime'].str.contains('BULL', na=False)].sort_values('HMM_Bull', ascending=False).head(15)
+                        if not bull_assets.empty:
+                            bull_display = bull_assets[['DisplayName', 'Regime', 'HMM_Bull', 'HMM_Bear']].copy()
+                            bull_display.columns = ['Symbol', 'Regime', 'P(Bull)', 'P(Bear)']
+                            st.dataframe(bull_display, width="stretch", hide_index=True, height=350)
+                        else:
+                            st.info("No securities in bullish regime.")
+
+                    with regime_col2:
+                        st.markdown("**Bearish Regime Securities**")
+                        bear_assets = results_df[results_df['Regime'].str.contains('BEAR', na=False)].sort_values('HMM_Bear', ascending=False).head(15)
+                        if not bear_assets.empty:
+                            bear_display = bear_assets[['DisplayName', 'Regime', 'HMM_Bull', 'HMM_Bear']].copy()
+                            bear_display.columns = ['Symbol', 'Regime', 'P(Bull)', 'P(Bear)']
+                            st.dataframe(bear_display, width="stretch", hide_index=True, height=350)
+                        else:
+                            st.info("No securities in bearish regime.")
+
+                    # Change points
+                    change_points = results_df[results_df['Change_Point'] == True]
+                    if not change_points.empty:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("**Regime Change Points Detected**")
+                        cp_display = change_points[['DisplayName', 'Regime', 'Signal', 'Confidence']].copy()
+                        cp_display.columns = ['Symbol', 'Regime', 'Signal', 'Confidence']
+                        st.dataframe(cp_display, width="stretch", hide_index=True)
+
+                with struct_tab3:
+                    # Performance metrics
+                    perf_col1, perf_col2 = st.columns(2)
+
+                    with perf_col1:
+                        st.markdown("**Top Gainers Today**")
+                        gainers = results_df.nlargest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']].copy()
+                        gainers.columns = ['Symbol', 'Price', 'Chg %', 'Signal']
+                        st.dataframe(gainers, width="stretch", hide_index=True)
+
+                    with perf_col2:
+                        st.markdown("**Top Losers Today**")
+                        losers = results_df.nsmallest(10, 'Change')[['DisplayName', 'Price', 'Change', 'Signal']].copy()
+                        losers.columns = ['Symbol', 'Price', 'Chg %', 'Signal']
+                        st.dataframe(losers, width="stretch", hide_index=True)
+
+            with tab_data:
                 st.markdown(f"##### Complete Market Scan Results ({len(results_df)} stocks) - {analysis_date_str}")
                 
                 # Filter options
@@ -2758,7 +2414,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
             st.warning("No data retrieved. Please check your internet connection or try a different universe.")
 
 
-def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, start_date, end_date):
+def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, start_date, end_date, run_clicked):
     """Market Time Series Analysis: Full NIRNAY (MSF + MMR + Regime) tracking over time"""
     
     # Validate dates
@@ -2776,7 +2432,11 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
     
     # Calculate date range
     date_range_days = (end_date - start_date).days
-    
+
+    # Top spacing
+    comps.section_gap()
+    comps.section_gap()
+
     # Display info
     if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
         universe_title = "F&O Stocks"
@@ -2788,23 +2448,77 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         universe_title = spread_index
     else:
         universe_title = spread_universe or "Unknown"
-    st.markdown(f"""
-    <div class='info-box'>
-        <h4>📈 Time Series Analysis - {universe_title}</h4>
-        <p>Full NIRNAY (MSF + MMR + Regime) signal distribution over time.<br>
-        <strong>Period:</strong> {start_date.strftime("%d %b %Y")} to {end_date.strftime("%d %b %Y")} ({date_range_days} days)</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    comps.render_section_header(
+        f"Time Series Analysis — {universe_title}",
+        f"Full NIRNAY (MSF + MMR + Regime) signal distribution over time · {start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')} ({date_range_days} days)",
+        icon="trending",
+        accent="cyan"
+    )
+
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    if st.button("◈ RUN MARKET TIME SERIES", type="primary"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
+
+    # Analysis Overview Section
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        comps.render_metric_card("Period", f"{date_range_days}", "Trading Days", "info")
+    with col2:
+        comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
+    with col3:
+        comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+    with col4:
+        comps.render_metric_card("Analysis Mode", "Time Series", "Signal Evolution", "neutral")
+
+    comps.section_gap()
+    comps.section_gap()
+
+    # Methodology Section
+    comps.render_section_header(
+        "Analysis Framework",
+        "Rolling window signal tracking with regime state evolution and volatility distribution",
+        icon="layers",
+        accent="emerald"
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                Rolling momentum ROC, efficiency ratio, and microstructure tracking across date range.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_m2:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                Macro correlation tracking over time with yield, currency, and commodity dynamics.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_m3:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                HMM state evolution, volatility regime distribution, and change point timeline.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    if run_clicked:
+        progress_slot = st.empty()
+
         # Fetch stock list
-        status_text.markdown(f"**⏳ Fetching {universe_title} stock list...**")
-        
+        theme.progress_bar(progress_slot, 5, f"Fetching {universe_title} list", "Initializing analysis...")
+
         if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
             stock_list, fetch_msg = get_fno_stock_list()
         elif spread_universe in ("India Indexes", "US Indexes"):
@@ -2815,74 +2529,67 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             stock_list, fetch_msg = get_currency_list()
         else:
             stock_list, fetch_msg = None, "Unknown universe"
-        
+
         if not stock_list:
             st.error(f"Failed to fetch stock list: {fetch_msg}")
-            progress_bar.empty()
-            status_text.empty()
+            progress_slot.empty()
             return
-        
-        st.toast(fetch_msg, icon="⚠️" if fetch_msg.startswith("⚠") else "✅")
+
+        st.toast(fetch_msg)
         total_stocks = len(stock_list)
-        
+
         # Batch download data for entire period
-        status_text.markdown(f"**⏳ Downloading historical data for {total_stocks} stocks...**")
-        progress_bar.progress(0.05)
-        
+        theme.progress_bar(progress_slot, 10, "Downloading Data", f"{total_stocks} securities historical data")
+
         data_dict, batch_msg = fetch_batch_data(stock_list, end_date=end_date, days_back=100 + date_range_days)
-        
+
         if data_dict is None:
             st.error(f"Failed to download data: {batch_msg}")
-            progress_bar.empty()
-            status_text.empty()
+            progress_slot.empty()
             return
-        
-        st.toast(batch_msg, icon="📥")
-        
+
+        st.toast(batch_msg)
+
         # Fetch macro data ONCE for all stocks (VIX, DXY, rates are market-wide)
-        status_text.markdown("**⏳ Fetching macro data for MMR analysis...**")
-        progress_bar.progress(0.1)
+        theme.progress_bar(progress_slot, 15, "Macro Data", "Fetching global macro factors for MMR...")
         macro_df = fetch_macro_data(days_back=100 + date_range_days)
-        
+
         # Generate list of trading days to analyze
-        status_text.markdown("**⏳ Identifying trading days...**")
-        progress_bar.progress(0.12)
-        
+        theme.progress_bar(progress_slot, 18, "Trading Calendar", "Identifying trading days in range...")
+
         # Use one of the stocks to identify trading days
         sample_ticker = list(data_dict.keys())[0]
         sample_df = data_dict[sample_ticker]
         sample_df.index = pd.to_datetime(sample_df.index)
         if sample_df.index.tz is not None:
             sample_df.index = sample_df.index.tz_localize(None)
-        
+
         # Get trading days in range
         start_ts = pd.Timestamp(start_date)
         end_ts = pd.Timestamp(end_date)
         trading_days = sample_df.index[(sample_df.index >= start_ts) & (sample_df.index <= end_ts)].tolist()
-        
+
         if len(trading_days) == 0:
             st.error("No trading days found in the selected date range.")
-            progress_bar.empty()
-            status_text.empty()
+            progress_slot.empty()
             return
-        
+
         # Check if requested end date data is available
         actual_last_date = trading_days[-1].date() if trading_days else None
         is_today_included = actual_last_date == datetime.date.today() if actual_last_date else False
-        
+
         if end_date == datetime.date.today():
             if is_today_included:
-                st.toast(f"Live Data Included - {actual_last_date.strftime('%d %b %Y')}", icon="🔴")
+                st.toast(f"Live Data Included - {actual_last_date.strftime('%d %b %Y')}")
             else:
-                st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
+                st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}")
         elif actual_last_date and actual_last_date < end_date:
-            st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
-        
-        st.toast(f"Found {len(trading_days)} trading days", icon="📅")
-        
+            st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}")
+
+        st.toast(f"Found {len(trading_days)} trading days")
+
         # Process FULL analysis for all stocks (MSF + MMR + Regime)
-        status_text.markdown("**⏳ Computing MSF + MMR + Regime signals for all stocks...**")
-        progress_bar.progress(0.15)
+        theme.progress_bar(progress_slot, 20, "Computing Signals", "Computing MSF + MMR + Regime for all stocks...")
         
         processed_data = {}
         valid_tickers = list(data_dict.keys())
@@ -2904,15 +2611,17 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
                     pass
             
             if (i + 1) % 50 == 0:
-                progress_bar.progress(0.15 + 0.35 * (i + 1) / len(valid_tickers))
-        
-        status_text.markdown(f"**⏳ Analyzing {len(trading_days)} trading days...**")
-        
+                pct = 20 + int(30 * (i + 1) / len(valid_tickers))
+                theme.progress_bar(progress_slot, pct, "Computing Signals", f"{i+1}/{len(valid_tickers)} stocks processed")
+
+        theme.progress_bar(progress_slot, 50, "Analyzing Timeline", f"Processing {len(trading_days)} trading days...")
+
         # Analyze each trading day
         timeseries_results = []
-        
+
         for day_idx, trading_day in enumerate(trading_days):
-            progress_bar.progress(0.5 + 0.45 * (day_idx + 1) / len(trading_days))
+            pct = 50 + int(45 * (day_idx + 1) / len(trading_days))
+            theme.progress_bar(progress_slot, pct, "Timeline Analysis", f"{day_idx+1}/{len(trading_days)} days")
             
             day_stats = {
                 "Date": trading_day.date(),
@@ -3005,8 +2714,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             
             timeseries_results.append(day_stats)
         
-        progress_bar.empty()
-        status_text.empty()
+        progress_slot.empty()
         
         if not timeseries_results:
             st.warning("No data could be analyzed for the selected period.")
@@ -3019,179 +2727,154 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         # Show actual analyzed date range
         actual_start = ts_df['Date'].min().strftime('%d %b %Y')
         actual_end = ts_df['Date'].max().strftime('%d %b %Y')
-        st.toast(f"Time Series Complete! {len(ts_df)} days ({actual_start} to {actual_end})", icon="✅")
+        st.toast(f"Time Series Complete! {len(ts_df)} days")
         
         # Summary metrics
         st.markdown("<br>", unsafe_allow_html=True)
+        avg_oversold = ts_df['Oversold_Pct'].mean()
+        avg_overbought = ts_df['Overbought_Pct'].mean()
+        total_buys = ts_df['Buy_Signals'].sum()
+        total_sells = ts_df['Sell_Signals'].sum()
+        avg_signal = ts_df['Avg_Signal'].mean()
+        regime = "BULLISH" if avg_signal < -1 else "BEARISH" if avg_signal > 1 else "NEUTRAL"
+        regime_color = "success" if avg_signal < -1 else "danger" if avg_signal > 1 else "neutral"
+
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        
         with c1:
-            avg_oversold = ts_df['Oversold_Pct'].mean()
-            st.markdown(f'<div class="metric-card success"><h4>Avg Oversold</h4><h2>{avg_oversold:.1f}%</h2><div class="sub-metric">Daily Average</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Avg Oversold", f"{avg_oversold:.1f}%", "Daily Average", "success")
         with c2:
-            avg_overbought = ts_df['Overbought_Pct'].mean()
-            st.markdown(f'<div class="metric-card danger"><h4>Avg Overbought</h4><h2>{avg_overbought:.1f}%</h2><div class="sub-metric">Daily Average</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Avg Overbought", f"{avg_overbought:.1f}%", "Daily Average", "danger")
         with c3:
-            total_buys = ts_df['Buy_Signals'].sum()
-            st.markdown(f'<div class="metric-card primary"><h4>Total Buy Signals</h4><h2>{total_buys:,}</h2><div class="sub-metric">Over Period</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Total Buys", f"{total_buys:,}", "Over Period", "primary")
         with c4:
-            total_sells = ts_df['Sell_Signals'].sum()
-            st.markdown(f'<div class="metric-card warning"><h4>Total Sell Signals</h4><h2>{total_sells:,}</h2><div class="sub-metric">Over Period</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Total Sells", f"{total_sells:,}", "Over Period", "warning")
         with c5:
-            avg_signal = ts_df['Avg_Signal'].mean()
-            regime = "BULLISH" if avg_signal < -1 else "BEARISH" if avg_signal > 1 else "NEUTRAL"
-            regime_color = "success" if avg_signal < -1 else "danger" if avg_signal > 1 else "neutral"
-            st.markdown(f'<div class="metric-card {regime_color}"><h4>Period Regime</h4><h2 style="font-size: 1.1rem;">{regime}</h2><div class="sub-metric">Avg: {avg_signal:.2f}</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Period Regime", regime, f"Avg: {avg_signal:.2f}", regime_color)
         with c6:
-            st.markdown(f'<div class="metric-card info"><h4>Trading Days</h4><h2>{len(ts_df)}</h2><div class="sub-metric">Analyzed</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Trading Days", f"{len(ts_df)}", "Analyzed", "info")
         
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
         # Tabs for different views
-        tab3, tab1, tab2, tab4 = st.tabs(["**🎯 Regime Analysis**", "**📈 Zone Trends**", "**📊 Signal Trends**", "**📋 Data Table**"])
+        tab3, tab1, tab2, tab4 = st.tabs(["Regime Analysis", "Signal Dashboard", "Transaction Dynamics", "Data Terminal"])
         
         with tab1:
-            st.markdown("##### Overbought / Oversold Distribution Over Time")
+            comps.render_section_header("Extreme Signal Trends", "Overbought / Oversold Distribution Over Time", icon="activity", accent="cyan")
             st.markdown('<p style="color: #888888; font-size: 0.85rem;">Shows the percentage of stocks in each zone daily</p>', unsafe_allow_html=True)
             
             # Stacked area chart for zones
             fig_zones = go.Figure()
-            
+
             fig_zones.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Oversold_Pct'],
                 mode='lines', name='Oversold %',
-                fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.3)',
-                line=dict(color='#10b981', width=2)
+                fill='tozeroy', fillcolor='rgba(52,211,153,0.12)',
+                line=dict(color=COLOR_GREEN, width=1.5)
             ))
-            
+
             fig_zones.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Overbought_Pct'],
                 mode='lines', name='Overbought %',
-                fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.3)',
-                line=dict(color='#ef4444', width=2)
+                fill='tozeroy', fillcolor='rgba(251,113,133,0.12)',
+                line=dict(color=COLOR_RED, width=1.5)
             ))
-            
-            fig_zones.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=400,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of Stocks', range=[0, max(ts_df['Oversold_Pct'].max(), ts_df['Overbought_Pct'].max()) * 1.1]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_zones, width="stretch", config={'displayModeBar': False})
+
+            ymax = max(ts_df['Oversold_Pct'].max(), ts_df['Overbought_Pct'].max()) * 1.15
+            fig_zones.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+            style_axes(fig_zones, y_title="% of Stocks", y_range=[0, ymax])
+            st.plotly_chart(fig_zones, use_container_width=True, key="ts_etf_zones")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("##### Raw Counts Over Time")
+            comps.render_section_header("Signal Volume Trends", "Raw Counts Over Time", icon="bar-chart", accent="info")
             
             # Bar chart for raw counts
             fig_counts = go.Figure()
-            
+
             fig_counts.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Oversold'],
-                name='Oversold', 
-                marker=dict(color='#10b981', line=dict(color='#10b981', width=1))
+                name='Oversold',
+                marker=dict(color='rgba(52,211,153,0.85)')
             ))
-            
+
             fig_counts.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Overbought'],
-                name='Overbought', 
-                marker=dict(color='#ef4444', line=dict(color='#ef4444', width=1))
+                name='Overbought',
+                marker=dict(color='rgba(251,113,133,0.85)')
             ))
-            
-            fig_counts.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
-                margin=dict(l=10, r=10, t=10, b=50), barmode='group',
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Stock Count'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified',
-                colorway=['#10b981', '#ef4444']  # Ensure colors are applied
-            )
-            st.plotly_chart(fig_counts, width="stretch", config={'displayModeBar': False})
+
+            fig_counts.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='group')
+            style_axes(fig_counts, y_title="Stock Count")
+            st.plotly_chart(fig_counts, use_container_width=True, key="ts_etf_counts")
         
         with tab2:
-            st.markdown("##### Buy / Sell Signal Counts Over Time")
+            comps.render_section_header("Transaction Signal Trends", "Buy / Sell Signal Counts Over Time", icon="zap", accent="emerald")
             
             fig_signals = go.Figure()
             
             fig_signals.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Buy_Signals'],
                 mode='lines+markers', name='Buy Signals',
-                line=dict(color='#10b981', width=2),
-                marker=dict(size=6, color='#10b981')
+                line=dict(color=COLOR_GREEN, width=2),
+                marker=dict(size=6, color=COLOR_GREEN)
             ))
             
             fig_signals.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Sell_Signals'],
                 mode='lines+markers', name='Sell Signals',
-                line=dict(color='#ef4444', width=2),
-                marker=dict(size=6, color='#ef4444')
+                line=dict(color=COLOR_RED, width=2),
+                marker=dict(size=6, color=COLOR_RED)
             ))
             
-            fig_signals.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=400,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Signal Count'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_signals, width="stretch", config={'displayModeBar': False})
+            fig_signals.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+            style_axes(fig_signals, y_title="Signal Count")
+            st.plotly_chart(fig_signals, use_container_width=True, key="market_signals")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("##### Divergence Signals Over Time")
+            comps.render_section_header("Divergence Persistence", "Divergence Signals Over Time", icon="trending-up", accent="amber")
             
             fig_div = go.Figure()
             
             fig_div.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Bull_Div'],
                 name='Bullish Divergence', 
-                marker=dict(color='#FFC300', line=dict(color='#FFC300', width=1))
+                marker=dict(color=COLOR_GOLD, line=dict(color=COLOR_GOLD, width=1))
             ))
             
             fig_div.add_trace(go.Bar(
                 x=ts_df['Date'], y=-ts_df['Bear_Div'],
                 name='Bearish Divergence', 
-                marker=dict(color='#06b6d4', line=dict(color='#06b6d4', width=1))
+                marker=dict(color=COLOR_CYAN, line=dict(color=COLOR_CYAN, width=1))
             ))
             
-            fig_div.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
-                margin=dict(l=10, r=10, t=10, b=50), barmode='relative',
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Divergence Count'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified',
-                colorway=['#FFC300', '#06b6d4']
-            )
-            st.plotly_chart(fig_div, width="stretch", config={'displayModeBar': False})
+            fig_div.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='relative')
+            style_axes(fig_div, y_title="Divergence Count")
+            st.plotly_chart(fig_div, use_container_width=True, key="ts_div")
         
         with tab3:
             # ORIGINAL: Average Signal Value Over Time
-            st.markdown("##### Average Signal Value Over Time")
+            comps.render_section_header("Aggregate Signal Momentum", "Average Signal Value Over Time", icon="activity", accent="rose")
             st.markdown('<p style="color: #888888; font-size: 0.85rem;">Negative = Bullish Bias | Positive = Bearish Bias</p>', unsafe_allow_html=True)
             
             fig_avg = go.Figure()
             
-            colors = ['#10b981' if v < -2 else '#ef4444' if v > 2 else '#888888' for v in ts_df['Avg_Signal']]
+            colors = [COLOR_GREEN if v < -2 else COLOR_RED if v > 2 else COLOR_MUTED for v in ts_df['Avg_Signal']]
             
             fig_avg.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(lower=0),
-                fill='tozeroy', fillcolor='rgba(239,68,68,0.15)',
+                fill='tozeroy', fillcolor='rgba(251,113,133,0.05)',
                 line=dict(width=0), showlegend=False, hoverinfo='skip'
             ))
             
             fig_avg.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(upper=0),
-                fill='tozeroy', fillcolor='rgba(16,185,129,0.15)',
+                fill='tozeroy', fillcolor='rgba(52,211,153,0.05)',
                 line=dict(width=0), showlegend=False, hoverinfo='skip'
             ))
             
             fig_avg.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Avg_Signal'],
                 mode='lines+markers', name='Avg Signal',
-                line=dict(color='#FFC300', width=2),
+                line=dict(color=COLOR_GOLD, width=2),
                 marker=dict(size=6, color=colors)
             ))
             
@@ -3199,20 +2882,14 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             fig_avg.add_hline(y=-2, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
             fig_avg.add_hline(y=0, line=dict(color='rgba(255,255,255,0.3)', width=1))
             
-            fig_avg.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-6, 6]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_avg, width="stretch", config={'displayModeBar': False})
+            fig_avg.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+            style_axes(fig_avg, y_title="Avg Signal", y_range=[-6, 6])
+            st.plotly_chart(fig_avg, use_container_width=True, key="ts_avg")
             
             st.markdown("<br>", unsafe_allow_html=True)
             
             # NEW: HMM Regime Distribution Over Time
-            st.markdown("##### HMM Regime Distribution Over Time")
+            comps.render_section_header("HMM State Evolution", "HMM Regime Distribution Over Time", icon="layers", accent="cyan")
             st.markdown('<p style="color: #888888; font-size: 0.85rem;">Percentage of stocks in each HMM regime daily</p>', unsafe_allow_html=True)
             
             # Regime trend chart
@@ -3221,29 +2898,23 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             fig_regime.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Regime_Bull_Pct'],
                 mode='lines', name='Bull Regime %',
-                fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.3)',
-                line=dict(color='#10b981', width=2)
+                fill='tozeroy', fillcolor='rgba(52,211,153,0.12)',
+                line=dict(color=COLOR_GREEN, width=2)
             ))
             
             fig_regime.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Regime_Bear_Pct'],
                 mode='lines', name='Bear Regime %',
-                fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.3)',
-                line=dict(color='#ef4444', width=2)
+                fill='tozeroy', fillcolor='rgba(251,113,133,0.12)',
+                line=dict(color=COLOR_RED, width=2)
             ))
             
-            fig_regime.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of Stocks', range=[0, 100]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
+            fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM))
+            style_axes(fig_regime, y_title="% of Stocks", y_range=[0, 100])
+            st.plotly_chart(fig_regime, use_container_width=True, key="ts_regime")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("##### Volatility Regime & Change Points Over Time")
+            comps.render_section_header("Volatility Dynamics", "Volatility Regime & Change Points Over Time", icon="shield", accent="amber")
             
             # Volatility regime chart
             fig_vol = go.Figure()
@@ -3251,31 +2922,25 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             fig_vol.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Vol_High_Pct'],
                 mode='lines+markers', name='High Vol %',
-                line=dict(color='#f59e0b', width=2),
+                line=dict(color=COLOR_AMBER, width=2),
                 marker=dict(size=5)
             ))
             
             fig_vol.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Change_Points'],
                 name='Change Points',
-                marker=dict(color='#a855f7', opacity=0.7)
+                marker=dict(color=COLOR_PURPLE, opacity=0.7)
             ))
             
-            fig_vol.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=250,
-                margin=dict(l=10, r=10, t=10, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Count / %'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
+            fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL))
+            style_axes(fig_vol, y_title="Count / %")
+            st.plotly_chart(fig_vol, use_container_width=True, key="ts_vol")
             
             st.markdown("<br>", unsafe_allow_html=True)
             col_r1, col_r2 = st.columns(2)
             
             with col_r1:
-                st.markdown("##### HMM Regime Statistics")
+                comps.render_section_header("State Transition Metrics", "HMM Regime Statistics", icon="bar-chart", accent="emerald")
                 avg_bull = ts_df['Regime_Bull_Pct'].mean()
                 avg_bear = ts_df['Regime_Bear_Pct'].mean()
                 total_changes = ts_df['Change_Points'].sum()
@@ -3287,7 +2952,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
                 st.dataframe(pd.DataFrame(regime_stats), width="stretch", hide_index=True)
             
             with col_r2:
-                st.markdown("##### Signal Statistics")
+                comps.render_section_header("Distribution Metrics", "Signal Statistics", icon="database", accent="rose")
                 signal_stats = {
                     "Metric": ["Mean Signal", "Median Signal", "Min Signal", "Max Signal", "Std Dev"],
                     "Value": [
@@ -3326,7 +2991,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             )
 
 
-def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, start_date, end_date):
+def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, start_date, end_date, run_clicked):
     """ETF Time Series Analysis: Track overbought/oversold signals over time for fixed ETF universe"""
     
     # Validate dates
@@ -3344,39 +3009,95 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
     
     # Calculate date range
     date_range_days = (end_date - start_date).days
-    
+
+    # Top spacing
+    comps.section_gap()
+    comps.section_gap()
+
     # Display info
-    st.markdown(f"""
-    <div class='info-box'>
-        <h4>📈 ETF Time Series Analysis</h4>
-        <p>Track overbought/oversold signal distribution across {len(SCREENER_SYMBOLS)} ETFs over time.<br>
-        <strong>Period:</strong> {start_date.strftime("%d %b %Y")} to {end_date.strftime("%d %b %Y")} ({date_range_days} days)</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    comps.render_section_header(
+        "Time Series Analysis — ETF Universe",
+        f"Track overbought/oversold signal distribution across {len(SCREENER_SYMBOLS)} ETFs over time · {start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')} ({date_range_days} days)",
+        icon="trending",
+        accent="amber"
+    )
+
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    if st.button("◈ RUN ETF TIME SERIES ANALYSIS", type="primary"):
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
+
+    # Analysis Overview Section
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        comps.render_metric_card("Period", f"{date_range_days}", "Trading Days", "info")
+    with col2:
+        comps.render_metric_card("Signal Engines", "2", "MSF + MMR", "amber")
+    with col3:
+        comps.render_metric_card("Output Metrics", "8", "Signal + Regime + Zone", "warning")
+    with col4:
+        comps.render_metric_card("Universe", f"{len(SCREENER_SYMBOLS)}", "Curated ETFs", "neutral")
+
+    comps.section_gap()
+    comps.section_gap()
+
+    # Methodology Section
+    comps.render_section_header(
+        "Analysis Framework",
+        "Rolling window signal tracking with overbought/oversold distribution and macro correlation",
+        icon="layers",
+        accent="emerald"
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                Internal price structure via momentum ROC, efficiency ratio, and microstructure decomposition.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_m2:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                Macro correlation tracking bond yields, currencies, and commodity flows for regime shifts.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col_m3:
+        st.markdown("""
+        <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
+            <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
+            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                HMM state evolution, volatility regime distribution, and change point timeline.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    if run_clicked:
+        progress_slot = st.empty()
+
         # Fetch macro data
-        status_text.markdown("**⏳ Fetching global macro data...**")
-        progress_bar.progress(0.05)
-        
+        theme.progress_bar(progress_slot, 5, "Macro Data", "Fetching global macro factors...")
+
         days_back = 100 + date_range_days + (datetime.date.today() - end_date).days
         macro_df = fetch_macro_data(days_back=days_back)
-        
+
         # Process each ETF
-        status_text.markdown("**⏳ Downloading ETF data...**")
-        progress_bar.progress(0.1)
-        
+        theme.progress_bar(progress_slot, 10, "Downloading ETFs", f"Processing {len(SCREENER_SYMBOLS)} ETFs...")
+
         processed_data = {}
         total = len(SCREENER_SYMBOLS)
-        
+
         for i, symbol in enumerate(SCREENER_SYMBOLS):
-            status_text.markdown(f"**⏳ Processing {get_display_name(symbol)} ({i+1}/{total})**")
-            progress_bar.progress(0.1 + 0.4 * (i + 1) / total)
+            pct = 10 + int(35 * (i + 1) / total)
+            theme.progress_bar(progress_slot, pct, f"Processing {get_display_name(symbol)}", f"{i+1}/{total} ETFs")
             
             df = fetch_ticker_data(symbol, macro_df, days_back=days_back)
             
@@ -3392,47 +3113,46 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
         
         if not processed_data:
             st.error("Failed to process ETF data.")
-            progress_bar.empty()
-            status_text.empty()
+            progress_slot.empty()
             return
-        
+
         # Generate list of trading days
-        status_text.markdown("**⏳ Identifying trading days...**")
-        
+        theme.progress_bar(progress_slot, 45, "Trading Calendar", "Identifying trading days in range...")
+
         sample_ticker = list(processed_data.keys())[0]
         sample_df = processed_data[sample_ticker]
-        
+
         start_ts = pd.Timestamp(start_date)
         end_ts = pd.Timestamp(end_date)
         trading_days = sample_df.index[(sample_df.index >= start_ts) & (sample_df.index <= end_ts)].tolist()
-        
+
         if len(trading_days) == 0:
             st.error("No trading days found in the selected date range.")
-            progress_bar.empty()
-            status_text.empty()
+            progress_slot.empty()
             return
-        
+
         # Check if requested end date data is available
         actual_last_date = trading_days[-1].date() if trading_days else None
         is_today_included = actual_last_date == datetime.date.today() if actual_last_date else False
-        
+
         if end_date == datetime.date.today():
             if is_today_included:
-                st.toast(f"Live Data Included - {actual_last_date.strftime('%d %b %Y')}", icon="🔴")
+                st.toast(f"Live Data Included - {actual_last_date.strftime('%d %b %Y')}")
             else:
-                st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
+                st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}")
         elif actual_last_date and actual_last_date < end_date:
-            st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}", icon="⚠️")
-        
-        st.toast(f"Found {len(trading_days)} trading days", icon="📅")
-        
+            st.toast(f"Data through {actual_last_date.strftime('%d %b %Y')}")
+
+        st.toast(f"Found {len(trading_days)} trading days")
+
         # Analyze each trading day
-        status_text.markdown(f"**⏳ Analyzing {len(trading_days)} trading days...**")
-        
+        theme.progress_bar(progress_slot, 50, "Timeline Analysis", f"Processing {len(trading_days)} trading days...")
+
         timeseries_results = []
-        
+
         for day_idx, trading_day in enumerate(trading_days):
-            progress_bar.progress(0.5 + 0.45 * (day_idx + 1) / len(trading_days))
+            pct = 50 + int(45 * (day_idx + 1) / len(trading_days))
+            theme.progress_bar(progress_slot, pct, "Timeline Analysis", f"{day_idx+1}/{len(trading_days)} days")
             
             day_stats = {
                 "Date": trading_day.date(),
@@ -3524,8 +3244,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             
             timeseries_results.append(day_stats)
         
-        progress_bar.empty()
-        status_text.empty()
+        progress_slot.empty()
         
         if not timeseries_results:
             st.warning("No data could be analyzed for the selected period.")
@@ -3538,39 +3257,39 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
         # Show actual analyzed date range
         actual_start = ts_df['Date'].min().strftime('%d %b %Y')
         actual_end = ts_df['Date'].max().strftime('%d %b %Y')
-        st.toast(f"ETF Time Series Complete! {len(ts_df)} days ({actual_start} to {actual_end})", icon="✅")
+        st.toast(f"ETF Time Series Complete! {len(ts_df)} days")
         
         # Summary metrics
         st.markdown("<br>", unsafe_allow_html=True)
+        avg_oversold = ts_df['Oversold_Pct'].mean()
+        avg_overbought = ts_df['Overbought_Pct'].mean()
+        total_buys = ts_df['Buy_Signals'].sum()
+        total_sells = ts_df['Sell_Signals'].sum()
+        avg_signal = ts_df['Avg_Signal'].mean()
+        regime = "BULLISH" if avg_signal < -1 else "BEARISH" if avg_signal > 1 else "NEUTRAL"
+        regime_color = "success" if avg_signal < -1 else "danger" if avg_signal > 1 else "neutral"
+
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        
         with c1:
-            avg_oversold = ts_df['Oversold_Pct'].mean()
-            st.markdown(f'<div class="metric-card success"><h4>Avg Oversold</h4><h2>{avg_oversold:.1f}%</h2><div class="sub-metric">Daily Average</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Avg Oversold", f"{avg_oversold:.1f}%", "Daily Average", "success")
         with c2:
-            avg_overbought = ts_df['Overbought_Pct'].mean()
-            st.markdown(f'<div class="metric-card danger"><h4>Avg Overbought</h4><h2>{avg_overbought:.1f}%</h2><div class="sub-metric">Daily Average</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Avg Overbought", f"{avg_overbought:.1f}%", "Daily Average", "danger")
         with c3:
-            total_buys = ts_df['Buy_Signals'].sum()
-            st.markdown(f'<div class="metric-card primary"><h4>Total Buy Signals</h4><h2>{total_buys:,}</h2><div class="sub-metric">Over Period</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Total Buys", f"{total_buys:,}", "Over Period", "primary")
         with c4:
-            total_sells = ts_df['Sell_Signals'].sum()
-            st.markdown(f'<div class="metric-card warning"><h4>Total Sell Signals</h4><h2>{total_sells:,}</h2><div class="sub-metric">Over Period</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Total Sells", f"{total_sells:,}", "Over Period", "warning")
         with c5:
-            avg_signal = ts_df['Avg_Signal'].mean()
-            regime = "BULLISH" if avg_signal < -1 else "BEARISH" if avg_signal > 1 else "NEUTRAL"
-            regime_color = "success" if avg_signal < -1 else "danger" if avg_signal > 1 else "neutral"
-            st.markdown(f'<div class="metric-card {regime_color}"><h4>Period Regime</h4><h2 style="font-size: 1.1rem;">{regime}</h2><div class="sub-metric">Avg: {avg_signal:.2f}</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Period Regime", regime, f"Avg: {avg_signal:.2f}", regime_color)
         with c6:
-            st.markdown(f'<div class="metric-card info"><h4>Trading Days</h4><h2>{len(ts_df)}</h2><div class="sub-metric">Analyzed</div></div>', unsafe_allow_html=True)
+            comps.render_metric_card("Trading Days", f"{len(ts_df)}", "Analyzed", "info")
         
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
         # Tabs for different views
-        tab3, tab1, tab2, tab4 = st.tabs(["**🎯 Regime Analysis**", "**📈 Zone Trends**", "**📊 Signal Trends**", "**📋 Data Table**"])
+        tab3, tab1, tab2, tab4 = st.tabs(["Regime Analysis", "Signal Dashboard", "Transaction Dynamics", "Data Terminal"])
         
         with tab1:
-            st.markdown("##### Overbought / Oversold Distribution Over Time")
+            comps.render_section_header("Extreme Signal Trends", "Overbought / Oversold Distribution Over Time", icon="activity", accent="cyan")
             st.markdown('<p style="color: #888888; font-size: 0.85rem;">Shows the percentage of ETFs in each zone daily</p>', unsafe_allow_html=True)
             
             fig_zones = go.Figure()
@@ -3578,137 +3297,112 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             fig_zones.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Oversold_Pct'],
                 mode='lines', name='Oversold %',
-                fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.3)',
-                line=dict(color='#10b981', width=2)
+                fill='tozeroy', fillcolor='rgba(52,211,153,0.12)',
+                line=dict(color=COLOR_GREEN, width=2)
             ))
             
             fig_zones.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Overbought_Pct'],
                 mode='lines', name='Overbought %',
-                fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.3)',
-                line=dict(color='#ef4444', width=2)
+                fill='tozeroy', fillcolor='rgba(251,113,133,0.12)',
+                line=dict(color=COLOR_RED, width=2)
             ))
             
-            fig_zones.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=400,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of ETFs', range=[0, max(ts_df['Oversold_Pct'].max(), ts_df['Overbought_Pct'].max()) * 1.1]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_zones, width="stretch", config={'displayModeBar': False})
+            ymax = max(ts_df['Oversold_Pct'].max(), ts_df['Overbought_Pct'].max()) * 1.15
+            fig_zones.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+            style_axes(fig_zones, y_title="% of ETFs", y_range=[0, ymax])
+            st.plotly_chart(fig_zones, use_container_width=True, key="market_zones")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("##### Raw Counts Over Time")
+            comps.render_section_header("Signal Volume Trends", "Raw Counts Over Time", icon="bar-chart", accent="info")
             
             fig_counts = go.Figure()
             
             fig_counts.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Oversold'],
                 name='Oversold', 
-                marker=dict(color='#10b981', line=dict(color='#10b981', width=1))
+                marker=dict(color=COLOR_GREEN, line=dict(color=COLOR_GREEN, width=1))
             ))
             
             fig_counts.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Overbought'],
                 name='Overbought', 
-                marker=dict(color='#ef4444', line=dict(color='#ef4444', width=1))
+                marker=dict(color=COLOR_RED, line=dict(color=COLOR_RED, width=1))
             ))
             
-            fig_counts.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
-                margin=dict(l=10, r=10, t=10, b=50), barmode='group',
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='ETF Count'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified',
-                colorway=['#10b981', '#ef4444']
-            )
-            st.plotly_chart(fig_counts, width="stretch", config={'displayModeBar': False})
+            fig_counts.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='group')
+            style_axes(fig_counts, y_title="ETF Count")
+            st.plotly_chart(fig_counts, use_container_width=True, key="market_counts")
         
         with tab2:
-            st.markdown("##### Buy / Sell Signal Counts Over Time")
+            comps.render_section_header("Transaction Signal Trends", "Buy / Sell Signal Counts Over Time", icon="zap", accent="emerald")
             
             fig_signals = go.Figure()
             
             fig_signals.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Buy_Signals'],
                 mode='lines+markers', name='Buy Signals',
-                line=dict(color='#10b981', width=2),
-                marker=dict(size=6, color='#10b981')
+                line=dict(color=COLOR_GREEN, width=2),
+                marker=dict(size=6, color=COLOR_GREEN)
             ))
             
             fig_signals.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Sell_Signals'],
                 mode='lines+markers', name='Sell Signals',
-                line=dict(color='#ef4444', width=2),
-                marker=dict(size=6, color='#ef4444')
+                line=dict(color=COLOR_RED, width=2),
+                marker=dict(size=6, color=COLOR_RED)
             ))
             
-            fig_signals.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=400,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Signal Count'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_signals, width="stretch", config={'displayModeBar': False})
+            fig_signals.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+            style_axes(fig_signals, y_title="Signal Count")
+            st.plotly_chart(fig_signals, use_container_width=True, key="market_signals")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("##### Divergence Signals Over Time")
+            comps.render_section_header("Divergence Persistence", "Divergence Signals Over Time", icon="trending-up", accent="amber")
             
             fig_div = go.Figure()
             
             fig_div.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Bull_Div'],
                 name='Bullish Divergence', 
-                marker=dict(color='#FFC300', line=dict(color='#FFC300', width=1))
+                marker=dict(color=COLOR_GOLD, line=dict(color=COLOR_GOLD, width=1))
             ))
             
             fig_div.add_trace(go.Bar(
                 x=ts_df['Date'], y=-ts_df['Bear_Div'],
                 name='Bearish Divergence', 
-                marker=dict(color='#06b6d4', line=dict(color='#06b6d4', width=1))
+                marker=dict(color=COLOR_CYAN, line=dict(color=COLOR_CYAN, width=1))
             ))
             
-            fig_div.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
-                margin=dict(l=10, r=10, t=10, b=50), barmode='relative',
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Divergence Count'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified',
-                colorway=['#FFC300', '#06b6d4']
-            )
-            st.plotly_chart(fig_div, width="stretch", config={'displayModeBar': False})
+            fig_div.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='relative')
+            style_axes(fig_div, y_title="Divergence Count")
+            st.plotly_chart(fig_div, use_container_width=True, key="ts_div")
         
         with tab3:
             # ORIGINAL: Average Signal Value Over Time
-            st.markdown("##### Average Signal Value Over Time")
+            comps.render_section_header("Aggregate Signal Momentum", "Average Signal Value Over Time", icon="activity", accent="rose")
             st.markdown('<p style="color: #888888; font-size: 0.85rem;">Negative = Bullish Bias | Positive = Bearish Bias</p>', unsafe_allow_html=True)
             
             fig_avg = go.Figure()
             
-            colors = ['#10b981' if v < -2 else '#ef4444' if v > 2 else '#888888' for v in ts_df['Avg_Signal']]
+            colors = [COLOR_GREEN if v < -2 else COLOR_RED if v > 2 else COLOR_MUTED for v in ts_df['Avg_Signal']]
             
             fig_avg.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(lower=0),
-                fill='tozeroy', fillcolor='rgba(239,68,68,0.15)',
+                fill='tozeroy', fillcolor='rgba(251,113,133,0.05)',
                 line=dict(width=0), showlegend=False, hoverinfo='skip'
             ))
             
             fig_avg.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Avg_Signal'].clip(upper=0),
-                fill='tozeroy', fillcolor='rgba(16,185,129,0.15)',
+                fill='tozeroy', fillcolor='rgba(52,211,153,0.05)',
                 line=dict(width=0), showlegend=False, hoverinfo='skip'
             ))
             
             fig_avg.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Avg_Signal'],
                 mode='lines+markers', name='Avg Signal',
-                line=dict(color='#FFC300', width=2),
+                line=dict(color=COLOR_GOLD, width=2),
                 marker=dict(size=6, color=colors)
             ))
             
@@ -3716,21 +3410,14 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             fig_avg.add_hline(y=-2, line=dict(color='rgba(16,185,129,0.5)', width=1, dash='dash'))
             fig_avg.add_hline(y=0, line=dict(color='rgba(255,255,255,0.3)', width=1))
             
-            fig_avg.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=350,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Average Signal', range=[-8, 8]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_avg, width="stretch", config={'displayModeBar': False})
-            
+            fig_avg.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
+            style_axes(fig_avg, y_title="Avg Signal", y_range=[-8, 8])
+            st.plotly_chart(fig_avg, use_container_width=True, key="ts_market_avg")
+
             st.markdown("<br>", unsafe_allow_html=True)
-            
+
             # NEW: HMM Regime Distribution Over Time
-            st.markdown("##### HMM Regime Distribution Over Time")
-            st.markdown('<p style="color: #888888; font-size: 0.85rem;">Percentage of ETFs in each HMM regime daily</p>', unsafe_allow_html=True)
+            comps.render_section_header("HMM Regime Distribution Over Time", "Percentage of ETFs in each HMM regime daily", icon="activity", accent="cyan")
             
             # Regime trend chart
             fig_regime = go.Figure()
@@ -3738,29 +3425,23 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             fig_regime.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Regime_Bull_Pct'],
                 mode='lines', name='Bull Regime %',
-                fill='tozeroy', fillcolor='rgba(16, 185, 129, 0.3)',
-                line=dict(color='#10b981', width=2)
+                fill='tozeroy', fillcolor='rgba(52,211,153,0.12)',
+                line=dict(color=COLOR_GREEN, width=2)
             ))
             
             fig_regime.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Regime_Bear_Pct'],
                 mode='lines', name='Bear Regime %',
-                fill='tozeroy', fillcolor='rgba(239, 68, 68, 0.3)',
-                line=dict(color='#ef4444', width=2)
+                fill='tozeroy', fillcolor='rgba(251,113,133,0.12)',
+                line=dict(color=COLOR_RED, width=2)
             ))
             
-            fig_regime.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=300,
-                margin=dict(l=10, r=10, t=30, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='% of ETFs', range=[0, 100]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_regime, width="stretch", config={'displayModeBar': False})
+            fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM))
+            style_axes(fig_regime, y_title="% of ETFs", y_range=[0, 100])
+            st.plotly_chart(fig_regime, use_container_width=True, key="market_regime")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("##### Volatility Regime & Change Points Over Time")
+            comps.render_section_header("Volatility Dynamics", "Volatility Regime & Change Points Over Time", icon="shield", accent="amber")
             
             # Volatility regime chart
             fig_vol = go.Figure()
@@ -3768,31 +3449,25 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             fig_vol.add_trace(go.Scatter(
                 x=ts_df['Date'], y=ts_df['Vol_High_Pct'],
                 mode='lines+markers', name='High Vol %',
-                line=dict(color='#f59e0b', width=2),
+                line=dict(color=COLOR_AMBER, width=2),
                 marker=dict(size=5)
             ))
             
             fig_vol.add_trace(go.Bar(
                 x=ts_df['Date'], y=ts_df['Change_Points'],
                 name='Change Points',
-                marker=dict(color='#a855f7', opacity=0.7)
+                marker=dict(color=COLOR_PURPLE, opacity=0.7)
             ))
             
-            fig_vol.update_layout(
-                template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='#1A1A1A', height=250,
-                margin=dict(l=10, r=10, t=10, b=50),
-                xaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)'),
-                yaxis=dict(showgrid=True, gridcolor='rgba(42,42,42,0.5)', title='Count / %'),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0)'),
-                font=dict(family='Inter', color='#EAEAEA'), hovermode='x unified'
-            )
-            st.plotly_chart(fig_vol, width="stretch", config={'displayModeBar': False})
+            fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL))
+            style_axes(fig_vol, y_title="Count / %")
+            st.plotly_chart(fig_vol, use_container_width=True, key="ts_vol")
             
             st.markdown("<br>", unsafe_allow_html=True)
             col_r1, col_r2 = st.columns(2)
             
             with col_r1:
-                st.markdown("##### HMM Regime Statistics")
+                comps.render_section_header("State Transition Metrics", "HMM Regime Statistics", icon="bar-chart", accent="emerald")
                 avg_bull = ts_df['Regime_Bull_Pct'].mean()
                 avg_bear = ts_df['Regime_Bear_Pct'].mean()
                 total_changes = ts_df['Change_Points'].sum()
@@ -3804,7 +3479,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                 st.dataframe(pd.DataFrame(regime_stats), width="stretch", hide_index=True)
             
             with col_r2:
-                st.markdown("##### Signal Statistics")
+                comps.render_section_header("Distribution Metrics", "Signal Statistics", icon="database", accent="rose")
                 signal_stats = {
                     "Metric": ["Mean Signal", "Median Signal", "Min Signal", "Max Signal", "Std Dev"],
                     "Value": [
@@ -3818,7 +3493,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
                 st.dataframe(pd.DataFrame(signal_stats), width="stretch", hide_index=True)
         
         with tab4:
-            st.markdown(f"##### Daily ETF Time Series Data ({len(ts_df)} trading days)")
+            comps.render_section_header("Analytical Data", f"Daily ETF Time Series ({len(ts_df)} days)", icon="list", accent="cyan")
             
             # Include regime data in display
             display_ts = ts_df[['Date', 'Total_Analyzed', 'Oversold', 'Overbought', 
@@ -3836,7 +3511,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             actual_start_str = ts_df['Date'].min().strftime('%Y%m%d')
             actual_end_str = ts_df['Date'].max().strftime('%Y%m%d')
             st.download_button(
-                label="📥 Download ETF Time Series Data (CSV)",
+                label="Download Time Series Data (CSV)",
                 data=csv_data,
                 file_name=f"nirnay_etf_timeseries_{actual_start_str}_{actual_end_str}.csv",
                 mime="text/csv"
