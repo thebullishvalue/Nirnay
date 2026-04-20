@@ -60,6 +60,10 @@ from universe import (
 
 theme.inject_css()
 
+# Initialize session state for analysis tracking
+if "analysis_completed" not in st.session_state:
+    st.session_state.analysis_completed = False
+
 # ══════════════════════════════════════════════════════════════════════════════
 # CONSTANTS & SYMBOLS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -549,7 +553,7 @@ def fetch_macro_data(days_back=100):
     yf_df = pd.DataFrame()
     try:
         yf_tickers = list(MACRO_SYMBOLS_YF.values())
-        yf_raw = yf.download(yf_tickers, start=start_date, end=end_date, progress=False)
+        yf_raw = yf.download(yf_tickers, start=start_date, end=end_date, progress=False, auto_adjust=False)
         if not yf_raw.empty:
             if isinstance(yf_raw.columns, pd.MultiIndex):
                 if 'Close' in yf_raw.columns.get_level_values(0):
@@ -569,7 +573,7 @@ def fetch_macro_data(days_back=100):
             has_today = any(idx.date() == datetime.date.today() for idx in yf_df.index)
             if not has_today:
                 try:
-                    live_yf = yf.download(yf_tickers, period="1d", progress=False)
+                    live_yf = yf.download(yf_tickers, period="1d", progress=False, auto_adjust=False)
                     if not live_yf.empty:
                         if isinstance(live_yf.columns, pd.MultiIndex):
                             if 'Close' in live_yf.columns.get_level_values(0):
@@ -602,7 +606,7 @@ def fetch_ticker_data(target_ticker, macro_df, days_back=100, include_live=True)
     end_date = datetime.date.today()
     start_date = end_date - datetime.timedelta(days=days_back + 365)
     try:
-        target_df = yf.download(target_ticker, start=start_date, end=end_date, progress=False)
+        target_df = yf.download(target_ticker, start=start_date, end=end_date, progress=False, auto_adjust=False)
         if target_df.empty:
             return None
         if isinstance(target_df.columns, pd.MultiIndex):
@@ -616,7 +620,7 @@ def fetch_ticker_data(target_ticker, macro_df, days_back=100, include_live=True)
             has_today = any(idx.date() == datetime.date.today() for idx in target_df.index)
             if not has_today:
                 try:
-                    live_df = yf.download(target_ticker, period="1d", progress=False)
+                    live_df = yf.download(target_ticker, period="1d", progress=False, auto_adjust=False)
                     if not live_df.empty:
                         if isinstance(live_df.columns, pd.MultiIndex):
                             live_df.columns = live_df.columns.get_level_values(0)
@@ -1112,6 +1116,9 @@ def render_sidebar():
 
         st.markdown('<div class="sidebar-title">Navigation</div>', unsafe_allow_html=True)
         mode = st.radio("Analysis Mode", ["Home", "ETF Screener", "Market Screener"], label_visibility="collapsed")
+
+        # Reset analysis flag when mode changes
+        st.session_state.analysis_completed = False
         st.markdown("<br>", unsafe_allow_html=True)
         
         # ETF Screener specific options (fixed ETF universe)
@@ -1243,7 +1250,7 @@ def render_sidebar():
                     button_text = "RUN MARKET TIME SERIES"
                     button_disabled = False
 
-            run_clicked = st.button(button_text, type="primary", use_container_width=True, disabled=button_disabled, key="sidebar_run_btn")
+            run_clicked = st.button(button_text, type="primary", width='stretch', disabled=button_disabled, key="sidebar_run_btn")
             st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         st.markdown(f"""
         <div class="system-spec">
@@ -1342,21 +1349,25 @@ def main():
     # Only show main header on Home page
     if "Home" in mode:
         comps.render_header("NIRNAY", "Quantitative Signal + Regime Intelligence System")
-    
+
+    # Set analysis completion flag when run button is clicked
+    if run_clicked:
+        st.session_state.analysis_completed = True
+
     if "Home" in mode:
         run_home_page()
     elif "ETF" in mode:
         # ETF Screener (fixed ETF universe)
         if etf_mode and "Time Series" in etf_mode:
-            run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, etf_start_date, etf_end_date, run_clicked)
+            run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, etf_start_date, etf_end_date, run_clicked or st.session_state.analysis_completed)
         else:
-            run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, etf_date, run_clicked)
+            run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, etf_date, run_clicked or st.session_state.analysis_completed)
     elif "Market" in mode:
         # Market Screener (F&O / Index universe)
         if spread_mode and "Time Series" in spread_mode:
-            run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_start_date, spread_end_date, run_clicked)
+            run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_start_date, spread_end_date, run_clicked or st.session_state.analysis_completed)
         else:
-            run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, run_clicked)
+            run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, spread_universe, spread_index, spread_date, run_clicked or st.session_state.analysis_completed)
 
     # Dynamic footer with current IST time
     utc_now = datetime.datetime.now(datetime.timezone.utc)
@@ -1390,18 +1401,17 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
     analysis_date_str = analysis_date.strftime("%d %b %Y")
     is_today = analysis_date == datetime.date.today()
 
-    # Top spacing
-    comps.section_gap()
-    comps.section_gap()
-
-    comps.render_section_header(
-        "ETF Screener — Fixed Universe",
-        f"Full NIRNAY (MSF + MMR) analysis across {len(SCREENER_SYMBOLS)} ETFs · Analysis Date: {analysis_date_str} {'(Today)' if is_today else ''}",
-        icon="grid",
-        accent="cyan"
-    )
-
     if not run_clicked:
+        # Top spacing
+        comps.section_gap()
+        comps.section_gap()
+
+        comps.render_section_header(
+            "ETF Screener — Fixed Universe",
+            f"Full NIRNAY (MSF + MMR) analysis across {len(SCREENER_SYMBOLS)} ETFs · Analysis Date: {analysis_date_str} {'(Today)' if is_today else ''}",
+            icon="grid",
+            accent="cyan"
+        )
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Analysis Overview Section
@@ -1610,7 +1620,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='HMM Regime', font=dict(size=12, color='#888888')))
-                    st.plotly_chart(fig_regime, use_container_width=True, key="regime_pie")
+                    st.plotly_chart(fig_regime, width='stretch', key="regime_pie")
 
                 with regime_col2:
                     vol_counts = results_df['Vol_Regime'].value_counts()
@@ -1621,13 +1631,13 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='Volatility Regime', font=dict(size=12, color='#888888')))
-                    st.plotly_chart(fig_vol, use_container_width=True, key="vol_pie")
+                    st.plotly_chart(fig_vol, width='stretch', key="vol_pie")
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # Signal distribution
                 comps.render_section_header("Signal Distribution", "Cross-sectional view of signal spread", icon="trending-up", accent="amber")
-                st.plotly_chart(create_distribution_chart(results_df), use_container_width=True, key="distribution")
+                st.plotly_chart(create_distribution_chart(results_df), width='stretch', key="distribution")
 
             with tab_opps:
                 # Ranked opportunities for traders
@@ -1721,7 +1731,7 @@ def run_etf_screener_mode(length, roc_len, regime_sensitivity, base_weight, anal
 
                 with signal_tab3:
                     # Signal extremes chart
-                    st.plotly_chart(create_ranking_chart(results_df, 15), use_container_width=True, key="ranking_15")
+                    st.plotly_chart(create_ranking_chart(results_df, 15), width='stretch', key="ranking_15")
 
             with tab_structure:
                 # Market context and structure
@@ -1860,11 +1870,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
     analysis_date_str = analysis_date.strftime("%d %b %Y")
     is_today = analysis_date == datetime.date.today()
 
-    # Top spacing
-    comps.section_gap()
-    comps.section_gap()
-
-    # Display universe info
+    # Display universe info (needed for both description and results)
     if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
         universe_title = "F&O Stocks"
         universe_desc = "Full NIRNAY (MSF + MMR + Regime) analysis across all F&O securities from NSE."
@@ -1881,104 +1887,103 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
         universe_title = spread_universe or "Unknown"
         universe_desc = "Full NIRNAY analysis."
 
-    # Currency symbol for price display
-    if spread_universe in ("Commodities", "US Indexes", "Currency"):
-        ccy = "$"
-    else:
-        ccy = "₹"
-
     accent_color = "cyan" if spread_universe == "India Indexes" else ("amber" if spread_universe == "Commodities" else ("violet" if spread_universe == "Currency" else "emerald"))
-    comps.render_section_header(
-        f"Market Screener — {universe_title}",
-        f"{universe_desc} Analysis Date: {analysis_date_str} {'(Today)' if is_today else ''}",
-        icon="target",
-        accent=accent_color
-    )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    if not run_clicked:
+        # Top spacing
+        comps.section_gap()
+        comps.section_gap()
+        comps.render_section_header(
+            f"Market Screener — {universe_title}",
+            f"{universe_desc} Analysis Date: {analysis_date_str} {'(Today)' if is_today else ''}",
+            icon="target",
+            accent=accent_color
+        )
 
-    # Universe Overview Section
-    col1, col2, col3, col4 = st.columns(4)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    # Dynamically show metrics based on selected universe
-    if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
-        with col1:
-            comps.render_metric_card("Universe", "F&O", "NSE Securities", "info")
-        with col2:
-            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
-        with col3:
-            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
-        with col4:
-            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
-    elif spread_universe in ("India Indexes", "US Indexes"):
-        num_symbols = len(get_index_stock_list(spread_index)[0]) if get_index_stock_list(spread_index)[0] else 0
-        with col1:
-            comps.render_metric_card("Universe", spread_index, f"{num_symbols} constituents" if num_symbols else "Index", "info")
-        with col2:
-            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
-        with col3:
-            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
-        with col4:
-            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
-    elif spread_universe == "Commodities":
-        with col1:
-            comps.render_metric_card("Universe", "Commodities", f"{len(COMMODITY_TICKERS)} futures", "info")
-        with col2:
-            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "amber")
-        with col3:
-            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
-        with col4:
-            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
-    elif spread_universe == "Currency":
-        with col1:
-            comps.render_metric_card("Universe", "FX Pairs", f"{len(CURRENCY_TICKERS)} pairs", "info")
-        with col2:
-            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "violet")
-        with col3:
-            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
-        with col4:
-            comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+        # Universe Overview Section
+        col1, col2, col3, col4 = st.columns(4)
 
-    comps.section_gap()
-    comps.section_gap()
+        # Dynamically show metrics based on selected universe
+        if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
+            with col1:
+                comps.render_metric_card("Universe", "F&O", "NSE Securities", "info")
+            with col2:
+                comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
+            with col3:
+                comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+            with col4:
+                comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+        elif spread_universe in ("India Indexes", "US Indexes"):
+            num_symbols = len(get_index_stock_list(spread_index)[0]) if get_index_stock_list(spread_index)[0] else 0
+            with col1:
+                comps.render_metric_card("Universe", spread_index, f"{num_symbols} constituents" if num_symbols else "Index", "info")
+            with col2:
+                comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
+            with col3:
+                comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+            with col4:
+                comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+        elif spread_universe == "Commodities":
+            with col1:
+                comps.render_metric_card("Universe", "Commodities", f"{len(COMMODITY_TICKERS)} futures", "info")
+            with col2:
+                comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "amber")
+            with col3:
+                comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+            with col4:
+                comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
+        elif spread_universe == "Currency":
+            with col1:
+                comps.render_metric_card("Universe", "FX Pairs", f"{len(CURRENCY_TICKERS)} pairs", "info")
+            with col2:
+                comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "violet")
+            with col3:
+                comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+            with col4:
+                comps.render_metric_card("Analysis Mode", "Single Day", f"Date: {analysis_date_str}", "neutral")
 
-    comps.render_section_header(
-        "Analysis Framework",
-        "Market Structure (MSF) + Macro Regression (MMR) decomposition with regime-aware signal scoring",
-        icon="layers",
-        accent="emerald"
-    )
+        comps.section_gap()
+        comps.section_gap()
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        comps.render_section_header(
+            "Analysis Framework",
+            "Market Structure (MSF) + Macro Regression (MMR) decomposition with regime-aware signal scoring",
+            icon="layers",
+            accent="emerald"
+        )
 
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                Internal price structure via momentum ROC, efficiency ratio, and microstructure decomposition.
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Internal price structure via momentum ROC, efficiency ratio, and microstructure decomposition.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_m2:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                Macro correlation tracking bond yields, currencies, and commodity flows for regime shifts.
+            """, unsafe_allow_html=True)
+        with col_m2:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Macro correlation tracking bond yields, currencies, and commodity flows for regime shifts.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_m3:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                HMM state evolution, volatility regime distribution, and change point timeline.
+            """, unsafe_allow_html=True)
+        with col_m3:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    HMM state evolution, volatility regime distribution, and change point timeline.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
     # Validate analysis date
     if analysis_date > datetime.date.today():
@@ -2170,7 +2175,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='HMM Regime', font=dict(size=12, color='#888888')))
-                    st.plotly_chart(fig_regime, use_container_width=True, key="regime_pie")
+                    st.plotly_chart(fig_regime, width='stretch', key="regime_pie")
 
                 with regime_col2:
                     vol_counts = results_df['Vol_Regime'].value_counts()
@@ -2181,13 +2186,13 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
                         textinfo='label+percent', textfont=dict(size=11, color='white')
                     ))
                     fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL, show_legend=False), title=dict(text='Volatility Regime', font=dict(size=12, color='#888888')))
-                    st.plotly_chart(fig_vol, use_container_width=True, key="vol_pie")
+                    st.plotly_chart(fig_vol, width='stretch', key="vol_pie")
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # Signal distribution
                 comps.render_section_header("Signal Distribution", "Cross-sectional view of signal spread", icon="trending-up", accent="amber")
-                st.plotly_chart(create_distribution_chart(results_df), use_container_width=True, key="distribution")
+                st.plotly_chart(create_distribution_chart(results_df), width='stretch', key="distribution")
 
             with tab_opps:
                 # Ranked opportunities for traders
@@ -2281,7 +2286,7 @@ def run_market_screener_mode(length, roc_len, regime_sensitivity, base_weight, s
 
                 with signal_tab3:
                     # Signal extremes chart
-                    st.plotly_chart(create_ranking_chart(results_df, 20), use_container_width=True, key="ranking_20")
+                    st.plotly_chart(create_ranking_chart(results_df, 20), width='stretch', key="ranking_20")
 
             with tab_structure:
                 # Market context and structure
@@ -2431,11 +2436,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
     # Calculate date range
     date_range_days = (end_date - start_date).days
 
-    # Top spacing
-    comps.section_gap()
-    comps.section_gap()
-
-    # Display info
+    # Display info (needed for both description and results)
     if spread_universe == "India Indexes" and spread_index == "F&O Stocks":
         universe_title = "F&O Stocks"
     elif spread_universe == "Commodities":
@@ -2446,69 +2447,74 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
         universe_title = spread_index
     else:
         universe_title = spread_universe or "Unknown"
-    comps.render_section_header(
-        f"Time Series Analysis — {universe_title}",
-        f"Full NIRNAY (MSF + MMR + Regime) signal distribution over time · {start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')} ({date_range_days} days)",
-        icon="trending",
-        accent="cyan"
-    )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    if not run_clicked:
+        # Top spacing
+        comps.section_gap()
+        comps.section_gap()
+        comps.render_section_header(
+            f"Time Series Analysis — {universe_title}",
+            f"Full NIRNAY (MSF + MMR + Regime) signal distribution over time · {start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')} ({date_range_days} days)",
+            icon="trending",
+            accent="cyan"
+        )
 
-    # Analysis Overview Section
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        comps.render_metric_card("Period", f"{date_range_days}", "Trading Days", "info")
-    with col2:
-        comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
-    with col3:
-        comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
-    with col4:
-        comps.render_metric_card("Analysis Mode", "Time Series", "Signal Evolution", "neutral")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    comps.section_gap()
-    comps.section_gap()
+        # Analysis Overview Section
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            comps.render_metric_card("Period", f"{date_range_days}", "Trading Days", "info")
+        with col2:
+            comps.render_metric_card("Signal Engines", "3", "MSF + MMR + Regime", "cyan")
+        with col3:
+            comps.render_metric_card("Output Metrics", "10", "Signal + Regime + HMM", "warning")
+        with col4:
+            comps.render_metric_card("Analysis Mode", "Time Series", "Signal Evolution", "neutral")
 
-    # Methodology Section
-    comps.render_section_header(
-        "Analysis Framework",
-        "Rolling window signal tracking with regime state evolution and volatility distribution",
-        icon="layers",
-        accent="emerald"
-    )
+        comps.section_gap()
+        comps.section_gap()
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        # Methodology Section
+        comps.render_section_header(
+            "Analysis Framework",
+            "Rolling window signal tracking with regime state evolution and volatility distribution",
+            icon="layers",
+            accent="emerald"
+        )
 
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                Rolling momentum ROC, efficiency ratio, and microstructure tracking across date range.
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Rolling momentum ROC, efficiency ratio, and microstructure tracking across date range.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_m2:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                Macro correlation tracking over time with yield, currency, and commodity dynamics.
+            """, unsafe_allow_html=True)
+        with col_m2:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Macro correlation tracking over time with yield, currency, and commodity dynamics.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_m3:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                HMM state evolution, volatility regime distribution, and change point timeline.
+            """, unsafe_allow_html=True)
+        with col_m3:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    HMM state evolution, volatility regime distribution, and change point timeline.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     if run_clicked:
@@ -2780,7 +2786,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             ymax = max(ts_df['Oversold_Pct'].max(), ts_df['Overbought_Pct'].max()) * 1.15
             fig_zones.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
             style_axes(fig_zones, y_title="% of Stocks", y_range=[0, ymax])
-            st.plotly_chart(fig_zones, use_container_width=True, key="ts_etf_zones")
+            st.plotly_chart(fig_zones, width='stretch', key="ts_etf_zones")
             
             st.markdown("<br>", unsafe_allow_html=True)
             comps.render_section_header("Signal Volume Trends", "Raw Counts Over Time", icon="bar-chart", accent="info")
@@ -2802,7 +2808,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
 
             fig_counts.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='group')
             style_axes(fig_counts, y_title="Stock Count")
-            st.plotly_chart(fig_counts, use_container_width=True, key="ts_etf_counts")
+            st.plotly_chart(fig_counts, width='stretch', key="ts_etf_counts")
         
         with tab2:
             comps.render_section_header("Transaction Signal Trends", "Buy / Sell Signal Counts Over Time", icon="zap", accent="emerald")
@@ -2825,7 +2831,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             
             fig_signals.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
             style_axes(fig_signals, y_title="Signal Count")
-            st.plotly_chart(fig_signals, use_container_width=True, key="market_signals")
+            st.plotly_chart(fig_signals, width='stretch', key="market_signals")
             
             st.markdown("<br>", unsafe_allow_html=True)
             comps.render_section_header("Divergence Persistence", "Divergence Signals Over Time", icon="trending-up", accent="amber")
@@ -2846,7 +2852,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             
             fig_div.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='relative')
             style_axes(fig_div, y_title="Divergence Count")
-            st.plotly_chart(fig_div, use_container_width=True, key="ts_div")
+            st.plotly_chart(fig_div, width='stretch', key="ts_div")
         
         with tab3:
             # ORIGINAL: Average Signal Value Over Time
@@ -2882,7 +2888,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             
             fig_avg.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
             style_axes(fig_avg, y_title="Avg Signal", y_range=[-6, 6])
-            st.plotly_chart(fig_avg, use_container_width=True, key="ts_avg")
+            st.plotly_chart(fig_avg, width='stretch', key="ts_avg")
             
             st.markdown("<br>", unsafe_allow_html=True)
             
@@ -2909,7 +2915,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             
             fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM))
             style_axes(fig_regime, y_title="% of Stocks", y_range=[0, 100])
-            st.plotly_chart(fig_regime, use_container_width=True, key="ts_regime")
+            st.plotly_chart(fig_regime, width='stretch', key="ts_regime")
             
             st.markdown("<br>", unsafe_allow_html=True)
             comps.render_section_header("Volatility Dynamics", "Volatility Regime & Change Points Over Time", icon="shield", accent="amber")
@@ -2932,7 +2938,7 @@ def run_market_timeseries_mode(length, roc_len, regime_sensitivity, base_weight,
             
             fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL))
             style_axes(fig_vol, y_title="Count / %")
-            st.plotly_chart(fig_vol, use_container_width=True, key="ts_vol")
+            st.plotly_chart(fig_vol, width='stretch', key="ts_vol")
             
             st.markdown("<br>", unsafe_allow_html=True)
             col_r1, col_r2 = st.columns(2)
@@ -3008,72 +3014,73 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
     # Calculate date range
     date_range_days = (end_date - start_date).days
 
-    # Top spacing
-    comps.section_gap()
-    comps.section_gap()
+    if not run_clicked:
+        # Top spacing
+        comps.section_gap()
+        comps.section_gap()
 
-    # Display info
-    comps.render_section_header(
-        "Time Series Analysis — ETF Universe",
-        f"Track overbought/oversold signal distribution across {len(SCREENER_SYMBOLS)} ETFs over time · {start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')} ({date_range_days} days)",
-        icon="trending",
-        accent="amber"
-    )
+        # Display info
+        comps.render_section_header(
+            "Time Series Analysis — ETF Universe",
+            f"Track overbought/oversold signal distribution across {len(SCREENER_SYMBOLS)} ETFs over time · {start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')} ({date_range_days} days)",
+            icon="trending",
+            accent="amber"
+        )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    # Analysis Overview Section
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        comps.render_metric_card("Period", f"{date_range_days}", "Trading Days", "info")
-    with col2:
-        comps.render_metric_card("Signal Engines", "2", "MSF + MMR", "amber")
-    with col3:
-        comps.render_metric_card("Output Metrics", "8", "Signal + Regime + Zone", "warning")
-    with col4:
-        comps.render_metric_card("Universe", f"{len(SCREENER_SYMBOLS)}", "Curated ETFs", "neutral")
+        # Analysis Overview Section
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            comps.render_metric_card("Period", f"{date_range_days}", "Trading Days", "info")
+        with col2:
+            comps.render_metric_card("Signal Engines", "2", "MSF + MMR", "amber")
+        with col3:
+            comps.render_metric_card("Output Metrics", "8", "Signal + Regime + Zone", "warning")
+        with col4:
+            comps.render_metric_card("Universe", f"{len(SCREENER_SYMBOLS)}", "Curated ETFs", "neutral")
 
-    comps.section_gap()
-    comps.section_gap()
+        comps.section_gap()
+        comps.section_gap()
 
-    # Methodology Section
-    comps.render_section_header(
-        "Analysis Framework",
-        "Rolling window signal tracking with overbought/oversold distribution and macro correlation",
-        icon="layers",
-        accent="emerald"
-    )
+        # Methodology Section
+        comps.render_section_header(
+            "Analysis Framework",
+            "Rolling window signal tracking with overbought/oversold distribution and macro correlation",
+            icon="layers",
+            accent="emerald"
+        )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                Internal price structure via momentum ROC, efficiency ratio, and microstructure decomposition.
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #06B6D4; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Market Structure</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Internal price structure via momentum ROC, efficiency ratio, and microstructure decomposition.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_m2:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                Macro correlation tracking bond yields, currencies, and commodity flows for regime shifts.
+            """, unsafe_allow_html=True)
+        with col_m2:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(212, 168, 83, 0.08); border: 1px solid rgba(212, 168, 83, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #D4A853; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Macro Regression</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    Macro correlation tracking bond yields, currencies, and commodity flows for regime shifts.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col_m3:
-        st.markdown("""
-        <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
-            <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
-            <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
-                HMM state evolution, volatility regime distribution, and change point timeline.
+            """, unsafe_allow_html=True)
+        with col_m3:
+            st.markdown("""
+            <div style="padding: 1rem; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; color: #A855F7; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Regime Intelligence</div>
+                <div style="font-size: 0.85rem; color: var(--ink-secondary); line-height: 1.6;">
+                    HMM state evolution, volatility regime distribution, and change point timeline.
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -3309,7 +3316,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             ymax = max(ts_df['Oversold_Pct'].max(), ts_df['Overbought_Pct'].max()) * 1.15
             fig_zones.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
             style_axes(fig_zones, y_title="% of ETFs", y_range=[0, ymax])
-            st.plotly_chart(fig_zones, use_container_width=True, key="market_zones")
+            st.plotly_chart(fig_zones, width='stretch', key="market_zones")
             
             st.markdown("<br>", unsafe_allow_html=True)
             comps.render_section_header("Signal Volume Trends", "Raw Counts Over Time", icon="bar-chart", accent="info")
@@ -3330,7 +3337,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             
             fig_counts.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='group')
             style_axes(fig_counts, y_title="ETF Count")
-            st.plotly_chart(fig_counts, use_container_width=True, key="market_counts")
+            st.plotly_chart(fig_counts, width='stretch', key="market_counts")
         
         with tab2:
             comps.render_section_header("Transaction Signal Trends", "Buy / Sell Signal Counts Over Time", icon="zap", accent="emerald")
@@ -3353,7 +3360,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             
             fig_signals.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
             style_axes(fig_signals, y_title="Signal Count")
-            st.plotly_chart(fig_signals, use_container_width=True, key="market_signals")
+            st.plotly_chart(fig_signals, width='stretch', key="market_signals")
             
             st.markdown("<br>", unsafe_allow_html=True)
             comps.render_section_header("Divergence Persistence", "Divergence Signals Over Time", icon="trending-up", accent="amber")
@@ -3374,7 +3381,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             
             fig_div.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM), barmode='relative')
             style_axes(fig_div, y_title="Divergence Count")
-            st.plotly_chart(fig_div, use_container_width=True, key="ts_div")
+            st.plotly_chart(fig_div, width='stretch', key="ts_div")
         
         with tab3:
             # ORIGINAL: Average Signal Value Over Time
@@ -3410,7 +3417,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             
             fig_avg.update_layout(**chart_layout(height=UI_CHART_HEIGHT_LARGE))
             style_axes(fig_avg, y_title="Avg Signal", y_range=[-8, 8])
-            st.plotly_chart(fig_avg, use_container_width=True, key="ts_market_avg")
+            st.plotly_chart(fig_avg, width='stretch', key="ts_market_avg")
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -3436,7 +3443,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             
             fig_regime.update_layout(**chart_layout(height=UI_CHART_HEIGHT_MEDIUM))
             style_axes(fig_regime, y_title="% of ETFs", y_range=[0, 100])
-            st.plotly_chart(fig_regime, use_container_width=True, key="market_regime")
+            st.plotly_chart(fig_regime, width='stretch', key="market_regime")
             
             st.markdown("<br>", unsafe_allow_html=True)
             comps.render_section_header("Volatility Dynamics", "Volatility Regime & Change Points Over Time", icon="shield", accent="amber")
@@ -3459,7 +3466,7 @@ def run_etf_timeseries_mode(length, roc_len, regime_sensitivity, base_weight, st
             
             fig_vol.update_layout(**chart_layout(height=UI_CHART_HEIGHT_SMALL))
             style_axes(fig_vol, y_title="Count / %")
-            st.plotly_chart(fig_vol, use_container_width=True, key="ts_vol")
+            st.plotly_chart(fig_vol, width='stretch', key="ts_vol")
             
             st.markdown("<br>", unsafe_allow_html=True)
             col_r1, col_r2 = st.columns(2)
