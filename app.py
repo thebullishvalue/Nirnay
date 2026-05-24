@@ -1097,7 +1097,7 @@ def create_ranking_chart(results_df, top_n=10):
 
 def render_header():
     """Render the main masthead header (matches Pragyam design)."""
-    comps.render_header("NIRNAY", "Quantitative Signal + Regime Intelligence System")
+    comps.render_header("Nirnay", "Quantitative Signal + Regime Intelligence System")
 
 
 def render_sidebar():
